@@ -1,0 +1,9 @@
+class Device():
+    def reset(self):
+        ...
+
+    def clock_pos(self):
+        ...
+    
+    def clock_neg(self):
+        ...
