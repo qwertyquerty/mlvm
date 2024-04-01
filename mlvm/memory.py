@@ -1,15 +1,12 @@
-from mlvm.device import Device
+from mlvm.device import AddressedDevice
 from mlvm.const import *
 
-class MLVMMemoryRW(Device):
+class MLVMMemoryRW(AddressedDevice):
     def __init__(self, bus, start_addr, size):
-        self.bus = bus
+        super().__init__(bus)
         self.size = size
         self.addr_range = range(start_addr, start_addr+size)
         self.memory = [0x00 for i in self.addr_range]
-
-    def unoffset_addr(self, addr):
-        return addr - self.addr_range.start
 
     def clock_neg(self):
         if self.bus.address in self.addr_range:

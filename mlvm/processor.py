@@ -4,7 +4,7 @@ from mlvm.instructions import INSTRUCTIONS
 
 class MLVMProcessor(Device):
     def __init__(self, bus):
-        self.bus = bus
+        super().__init__(bus)
         self.reg_p = ROM_START
         self.reg_a = 0x00
         self.reg_b = 0x00

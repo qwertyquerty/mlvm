@@ -1,7 +1,7 @@
 from mlvm.const import *
 from mlvm.device import Device
 
-class MLVMBus(Device):
+class MLVMBus():
     READ = False
     WRITE = True
 
@@ -10,6 +10,7 @@ class MLVMBus(Device):
         self.address = self.next_address = 0x0000
         self.data = self.next_data = 0x00
         self.intent = self.next_intent = READ
+        self.cycle = 0
 
     def reset(self):
         for device in self.devices:
@@ -18,6 +19,7 @@ class MLVMBus(Device):
     def tick(self) -> None:
         self.clock_neg()
         self.clock_pos()
+        self.cycle += 1
 
     def clock_pos(self) -> None:
         self.latch()

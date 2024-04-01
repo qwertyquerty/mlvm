@@ -1,8 +1,6 @@
 import re
-
 import mlvm.instructions
 from mlvm.const import *
-
 import sys
 
 if len(sys.argv) < 3:
@@ -20,19 +18,13 @@ except:
     exit(1)
 
 tokens = re.split("[\n ]+", mlvm_script)
-
 position = 0
-
 todo_labels = {}
-
 labels = {}
-
 output_bytes = []
-
 
 def append_value(output, value, position, force_half = False):
     assert value <= 0xFFFF
-
     if value > 0xFF or force_half:
         output.append(value & 0xFF)
         output.append((value >> 8) & 0xFF)
@@ -48,22 +40,17 @@ def append_placeholder_label(output, label, position):
     return position + 2
 
 token_pos = 0
-
 position = 0
 offset = 0
-
 commenting = False
 
 while token_pos < len(tokens):
     token = tokens[token_pos]
 
-    if token.startswith("/*"):
-        commenting = True
+    if token.startswith("/*"): commenting = True
 
     if commenting:
-        if token.endswith("*/"):
-            commenting = False
-        
+        if token.endswith("*/"): commenting = False
         token_pos += 1
         continue
 
@@ -75,14 +62,20 @@ while token_pos < len(tokens):
         cmd = token.lstrip(".")
         if cmd == "offset":
             token_pos += 1
-            offset = int(tokens[token_pos], 0) & 0xFFFF
-            position = offset
+            offset = position = int(tokens[token_pos], 0) & 0xFFFF
 
         elif cmd == "seek":
             token_pos += 1
             value = int(tokens[token_pos], 0) & 0xFFFF
             for i in range(value - position):
                 position = append_value(output_bytes, 0x00, position)
+        
+        elif cmd == "set":
+            token_pos += 1
+            name = tokens[token_pos]
+            token_pos += 1
+            value = int(tokens[token_pos], 0) & 0xFFFF
+            labels[name] = value
 
     elif token.endswith(":"):
         label = token.rstrip(":")
@@ -100,7 +93,6 @@ while token_pos < len(tokens):
     
     token_pos += 1
 
-
 for position,label in todo_labels.items():
     output_bytes[position - offset] = labels[label] & 0xFF
     output_bytes[position - offset + 1] = (labels[label] >> 8) & 0xFF
@@ -112,9 +104,7 @@ for byte in output_bytes:
         print(f"0x{n:04x}: ", end=" ")
 
     print(f"0x{byte:02x}", end=" ")
-
     n += 1
-    
 
 try:
     with open(output_file, "wb") as output_stream:

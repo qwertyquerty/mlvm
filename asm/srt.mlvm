@@ -1,4 +1,4 @@
-/* Fibonacci in MLVM Assembly */
+/* Fibonacci in MLVM Assembly with subroutines */
 
 .offset 0x8000          /* ROM starts at 0x8000 */
 .seek 0x8000
@@ -7,7 +7,7 @@ start:
     LNE 0x0101          /* A = 1, B = 1 */
 
 loop:
-    DLA                 /* Log A to debug console */
+    LND $log SRT        /* Log A to debug console */
     ADD                 /* C = A + B */
     LND $halt JSC       /* Jump to halt if carry bit is set (overflow) */
     SBA                 /* B = A */
@@ -16,3 +16,7 @@ loop:
 
 halt:
     HLT
+
+log:
+    DLA
+    RET
