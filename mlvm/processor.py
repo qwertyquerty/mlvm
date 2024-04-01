@@ -38,5 +38,5 @@ class MLVMProcessor(Device):
             self.reg_p = (self.reg_p + 1) & 0xFFFF
             self.bus.read(self.reg_p)
 
-        print("STEP:", self.cur_step, "S:", hex(self.reg_s), "A:", hex(self.reg_a), "B:", hex(self.reg_b), "C:", hex(self.reg_c), "P:", hex(self.reg_p), "D:", hex(self.reg_l | (self.reg_h << 8)), "Data:", hex(self.bus.data), "Addr:", hex(self.bus.address), "Intent:", self.bus.intent)
-        import time; time.sleep(0.1)
+        #print("STEP:", self.cur_step, "S:", hex(self.reg_s), "A:", hex(self.reg_a), "B:", hex(self.reg_b), "C:", hex(self.reg_c), "P:", hex(self.reg_p), "D:", hex(self.reg_l | (self.reg_h << 8)), "Data:", hex(self.bus.data), "Addr:", hex(self.bus.address), "Intent:", self.bus.intent)
+        #import time; time.sleep(0.1)

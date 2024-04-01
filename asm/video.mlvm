@@ -51,14 +51,12 @@ sub_reset_x:
     LND $sub_reset_y SRC
 
     LND $Y WRC          /* Write new Y value to memory */
-
-    LND $sub_flip SRT   /* Update the screen */
-
     RET
 
 sub_reset_y:
     LNA 0x00            /* Reset Y to zero */
     LND $Y WRC
+    LND $sub_flip SRT   /* Update the screen */
     RET
 
 sub_flip:               /* Writes a one to the doublebuffer flip register */

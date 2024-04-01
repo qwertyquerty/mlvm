@@ -226,7 +226,7 @@ INSTRUCTIONS[0x48] = LSA = [
 # a == b
 
 INSTRUCTIONS[0x49] = CMP = [
-    lambda cpu: setattr(cpu, "reg_s", (cpu.reg_s | STATUS_CARRY) if cpu.reg_a == cpu.reg_b else cpu.reg_s)
+    lambda cpu: setattr(cpu, "reg_s", (cpu.reg_s | STATUS_CARRY) if cpu.reg_a == cpu.reg_b else (cpu.reg_s & ~STATUS_CARRY))
 ]
 
 # Stack operations and jumps
