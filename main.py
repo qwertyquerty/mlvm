@@ -7,10 +7,10 @@ from mlvm.const import *
 import time
 
 bus = MLVMBus()
+cpu = MLVMProcessor(bus)
 ram = MLVMMemoryRW(bus, RAM_START, RAM_SIZE)
 rom = MLVMMemoryRO(bus, ROM_START, ROM_SIZE)
-cpu = MLVMProcessor(bus)
-gpu = MLVMVideoInterface(bus, PERIPH_ID_VIDEO)
+#gpu = MLVMVideoInterface(bus, PERIPH_ID_VIDEO)
 
 rom.load_file(open("rom.bin", "rb"))
 
