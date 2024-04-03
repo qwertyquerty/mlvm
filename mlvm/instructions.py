@@ -295,8 +295,50 @@ INSTRUCTIONS[0x53] = SRC = [
     lambda cpu: (setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF)) if cpu.reg_s & STATUS_CARRY else ...
 ]
 
+INSTRUCTIONS[0x54] = SIA = [
+    lambda cpu: (
+        (print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...,
+        cpu.bus.write(STACK_START_ADDR + cpu.reg_t, cpu.reg_p & 0xFF),
+        setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF)
+    ) if cpu.reg_a else ...,
+    lambda cpu: (
+        (print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...,
+        cpu.bus.write(STACK_START_ADDR + cpu.reg_t, (cpu.reg_p >> 8) & 0xFF),
+        setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF)
+    )  if cpu.reg_a else ...,
+    lambda cpu: (setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF)) if cpu.reg_a else ...
+]
 
-INSTRUCTIONS[0x54] = RET = [
+INSTRUCTIONS[0x55] = SIB = [
+    lambda cpu: (
+        (print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...,
+        cpu.bus.write(STACK_START_ADDR + cpu.reg_t, cpu.reg_p & 0xFF),
+        setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF)
+    ) if cpu.reg_b else ...,
+    lambda cpu: (
+        (print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...,
+        cpu.bus.write(STACK_START_ADDR + cpu.reg_t, (cpu.reg_p >> 8) & 0xFF),
+        setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF)
+    )  if cpu.reg_b else ...,
+    lambda cpu: (setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF)) if cpu.reg_b else ...
+]
+
+INSTRUCTIONS[0x56] = SIC = [
+    lambda cpu: (
+        (print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...,
+        cpu.bus.write(STACK_START_ADDR + cpu.reg_t, cpu.reg_p & 0xFF),
+        setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF)
+    ) if cpu.reg_c else ...,
+    lambda cpu: (
+        (print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...,
+        cpu.bus.write(STACK_START_ADDR + cpu.reg_t, (cpu.reg_p >> 8) & 0xFF),
+        setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF)
+    )  if cpu.reg_c else ...,
+    lambda cpu: (setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF)) if cpu.reg_c else ...
+]
+
+
+INSTRUCTIONS[0x57] = RET = [
     lambda cpu: (
         (print("STACK UNDERFLOW"), exit(ERR_STACK_UNDERFLOW)) if cpu.reg_t == 0 else ...,
         setattr(cpu, "reg_t", (cpu.reg_t - 1) & 0xFFFF),
@@ -314,35 +356,35 @@ INSTRUCTIONS[0x54] = RET = [
     )
 ]
 
-INSTRUCTIONS[0x55] = JMP = [
+INSTRUCTIONS[0x58] = JMP = [
     lambda cpu: setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF)
 ]
 
-INSTRUCTIONS[0x56] = JIA = [
+INSTRUCTIONS[0x59] = JIA = [
     lambda cpu: JMP[0](cpu) if cpu.reg_a else ...
 ]
 
-INSTRUCTIONS[0x57] = JIB = [
+INSTRUCTIONS[0x5A] = JIB = [
     lambda cpu: JMP[0](cpu) if cpu.reg_b else ...
 ]
 
-INSTRUCTIONS[0x58] = JIC = [
+INSTRUCTIONS[0x5B] = JIC = [
     lambda cpu: JMP[0](cpu) if cpu.reg_c else ...
 ]
 
-INSTRUCTIONS[0x59] = JNA = [
+INSTRUCTIONS[0x5C] = JNA = [
     lambda cpu: JMP[0](cpu) if not cpu.reg_a else ...
 ]
 
-INSTRUCTIONS[0x5A] = JNB = [
+INSTRUCTIONS[0x5D] = JNB = [
     lambda cpu: JMP[0](cpu) if not cpu.reg_b else ...
 ]
 
-INSTRUCTIONS[0x5B] = JNC = [
+INSTRUCTIONS[0x5E] = JNC = [
     lambda cpu: JMP[0](cpu) if not cpu.reg_c else ...
 ]
 
-INSTRUCTIONS[0x5C] = JSC = [
+INSTRUCTIONS[0x5F] = JSC = [
     lambda cpu: JMP[0](cpu) if (cpu.reg_s & STATUS_CARRY) else ...
 ]
 
