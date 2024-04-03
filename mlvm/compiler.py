@@ -22,7 +22,7 @@ OPERATORS = (
 )
 
 KEYWORDS = [
-    "fn", "define", "include", "asm", "var", "set", "if", "else",
+    "fn", "define", "include", "var", "set", "if", "else",
     "while", "halt", "asm", "begin", "return", "call"
 ]
 
