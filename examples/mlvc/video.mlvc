@@ -1,0 +1,43 @@
+define REG_X 0x6000;
+define REG_Y 0x6001;
+define REG_C 0x6002;
+define REG_F 0x6003;
+
+var x y c;
+
+fn flip {
+    set REG_F = 1;
+}
+
+var rnd_ret;
+fn rnd {
+    asm {
+        #RND #LND @rnd_ret #WRA
+    }
+}
+
+fn set_pixel {
+    set REG_X = x;
+    set REG_Y = y;
+    set REG_C = c;
+}
+
+begin
+
+while 1 {
+    call rnd;
+    set c = rnd_ret;
+    call set_pixel;
+
+    set x = x + 1;
+    
+    if x == 64 {
+        call rnd;
+        set y = y + 2;
+        set x = 0;
+        if y >= 64 {
+            set y = 0;
+            call flip;
+        }
+    }
+}

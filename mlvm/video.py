@@ -1,6 +1,9 @@
 from mlvm.device import Peripheral
 from mlvm.const import *
 
+import os
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+
 import pygame as pg
 import colorsys
 
@@ -8,6 +11,7 @@ REG_X_POS = 0x00
 REG_Y_POS = 0x01
 REG_COLOR = 0x02
 REG_FLIP = 0x03
+REG_FILL = 0x04
 
 EVENT_CYCLE_INTERVAL = 1000
 
@@ -53,9 +57,16 @@ class MLVMVideoInterface(Peripheral):
     
     def set_pixel(self, x: int, y: int, c: int):
         self.video_ram[y*VIDEO_WIDTH + x] = c
+        self.surface.set_at((self.reg_x, self.reg_y), byte_to_rgb(self.reg_c))
     
     def get_pixel(self, x: int, y: int):
         return self.video_ram[y*VIDEO_WIDTH + x]
+
+    def fill(self, c: int):
+        for i in range(len(self.video_ram)):
+            self.video_ram[i] = c
+        
+        self.surface.fill(byte_to_rgb(c))
 
     def clock_neg(self):
         if self.bus.address in self.addr_range and self.bus.intent == WRITE:
@@ -70,13 +81,15 @@ class MLVMVideoInterface(Peripheral):
             elif reg == REG_COLOR:
                 self.reg_c = self.bus.data
                 self.set_pixel(self.reg_x, self.reg_y, self.reg_c)
-                self.surface.set_at((self.reg_x, self.reg_y), byte_to_rgb(self.reg_c))
 
             elif reg == REG_FLIP:
                 pg.transform.scale_by(self.surface, DISPLAY_SCALE, self.screen)
                 pg.display.flip()
                 self.clock.tick(-1)
                 pg.display.set_caption(f"MLVM FPS: {int(self.clock.get_fps())}")
+            
+            elif reg == REG_FILL:
+                self.fill(self.bus.data)
         
         if self.bus.cycle % EVENT_CYCLE_INTERVAL == 0:
             for event in pg.event.get():

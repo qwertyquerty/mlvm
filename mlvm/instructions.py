@@ -190,7 +190,7 @@ INSTRUCTIONS[0x44] = ADD = [
     )
 ]
 
-# c = a + b
+# c = a - b
 
 INSTRUCTIONS[0x45] = SUB = [
     lambda cpu: (
@@ -200,34 +200,52 @@ INSTRUCTIONS[0x45] = SUB = [
 ]
 
 
-# h,l = a * b
+# h,(l, c) = a * b
 
 INSTRUCTIONS[0x46] = MUL = [
     lambda cpu: (
+        setattr(cpu, "reg_c", (cpu.reg_a * cpu.reg_b) & 0xFF),
         setattr(cpu, "reg_l", (cpu.reg_a * cpu.reg_b) & 0xFF),
         setattr(cpu, "reg_h", ((cpu.reg_a * cpu.reg_b) >> 8) & 0xFF)
     )
 ]
 
 
-# a = a >> 1
+# c = a >> b
 
-INSTRUCTIONS[0x47] = RSA = [
-    lambda cpu: setattr(cpu, "reg_a", (cpu.reg_a >> 1) & 0xFF)
+INSTRUCTIONS[0x47] = RSS = [
+    lambda cpu: setattr(cpu, "reg_c", (cpu.reg_a >> cpu.reg_b) & 0xFF)
 ]
 
 
-# a = a << 1
+# c = a << b
 
-INSTRUCTIONS[0x48] = LSA = [
-    lambda cpu: setattr(cpu, "reg_a", (cpu.reg_a << 1) & 0xFF)
+INSTRUCTIONS[0x48] = LSS = [
+    lambda cpu: setattr(cpu, "reg_c", (cpu.reg_a << cpu.reg_b) & 0xFF)
 ]
 
-# a == b
+# comparisons
 
 INSTRUCTIONS[0x49] = CMP = [
-    lambda cpu: setattr(cpu, "reg_s", (cpu.reg_s | STATUS_CARRY) if cpu.reg_a == cpu.reg_b else cpu.reg_s)
+    lambda cpu: setattr(cpu, "reg_c", int(cpu.reg_a == cpu.reg_b))
 ]
+
+INSTRUCTIONS[0x4A] = GTE = [
+    lambda cpu: setattr(cpu, "reg_c", int(cpu.reg_a >= cpu.reg_b))
+]
+
+INSTRUCTIONS[0x4B] = LTE = [
+    lambda cpu: setattr(cpu, "reg_c", int(cpu.reg_a <= cpu.reg_b))
+]
+
+INSTRUCTIONS[0x4C] = GTC = [
+    lambda cpu: setattr(cpu, "reg_c", int(cpu.reg_a > cpu.reg_b))
+]
+
+INSTRUCTIONS[0x4D] = LTC = [
+    lambda cpu: setattr(cpu, "reg_c", int(cpu.reg_a < cpu.reg_b))
+]
+
 
 # Stack operations and jumps
 

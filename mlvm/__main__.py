@@ -4,15 +4,28 @@ from mlvm.processor import MLVMProcessor
 from mlvm.video import MLVMVideoInterface
 from mlvm.const import *
 
+import sys
 import time
+
+if len(sys.argv) < 2:
+    print("You must specify an input rom!")
+    exit(1)
+
+input_file = sys.argv[1]
 
 bus = MLVMBus()
 ram = MLVMMemoryRW(bus, RAM_START, RAM_SIZE)
 rom = MLVMMemoryRO(bus, ROM_START, ROM_SIZE)
+
+try:
+    with open(input_file, "rb") as input_stream:
+        rom.load_file(input_stream)
+except:
+    print(f"Failed to open {input_file}!")
+    exit(1)
+
 cpu = MLVMProcessor(bus)
 gpu = MLVMVideoInterface(bus, PERIPH_ID_VIDEO)
-
-rom.load_file(open("rom.bin", "rb"))
 
 bus.reset()
 
