@@ -1,0 +1,36 @@
+define REG_X 0x6000;
+define REG_Y 0x6001;
+define REG_C 0x6002;
+define REG_F 0x6003;
+define REG_CL 0x6004;
+
+fn screen_clear {
+    set REG_CL = 1;
+}
+
+fn screen_flip {
+    set REG_F = 1;
+}
+
+var pix_x pix_y pix_c;
+fn set_pixel {
+    set REG_X = pix_x;
+    set REG_Y = pix_y;
+    set REG_C = pix_c;
+}
+
+var rect_x rect_y rect_w rect_h rect_c _rect_i _rect_j;
+fn draw_rect {
+    set _rect_i = 0;
+    set _rect_j = 0;
+    while _rect_i < rect_w {
+        while _rect_j < rect_h {
+            set REG_X = rect_x + _rect_i;
+            set REG_Y = rect_y + _rect_j;
+            set REG_C = rect_c;
+            set _rect_j = _rect_j + 1;
+        }
+        set _rect_j = 0;
+        set _rect_i = _rect_i + 1;
+    }
+}

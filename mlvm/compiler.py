@@ -1,5 +1,5 @@
 import re
-from mlvm.const import *
+import os
 import sys
 from mlvm.const import *
 
@@ -40,17 +40,19 @@ except:
     print(f"Failed to open {input_file}!")
     exit(1)
 
-lexer_regex_s = "( |\\n"
 
-for operator in OPERATORS:
-    operator = '\\' + ('\\'.join(list(operator)))
-    lexer_regex_s += f"|{operator}"
+def file_to_tokens(file):
+    lexer_regex_s = "( |\\n"
 
-lexer_regex_s += ")"
+    for operator in OPERATORS:
+        operator = '\\' + ('\\'.join(list(operator)))
+        lexer_regex_s += f"|{operator}"
 
-tokens = re.split(lexer_regex_s, mlvc_script)
+    lexer_regex_s += ")"
+    tokens = re.split(lexer_regex_s, file)
+    tokens = [token for token in tokens if token != ""]
 
-tokens = [token for token in tokens if token != ""]
+    return tokens
 
 VALUE_RE = "(0x[0-9A-Fa-f]+|0b[01]+|-?[0-9]+)"
 
@@ -71,6 +73,7 @@ class CompilerStateMachine():
     STATE_CALL = 9
     STATE_IF = 10
     STATE_LOOP = 11
+    STATE_INCLUDE = 12
 
     ASM_ELEMENT_TYPE_INSTRUCTION = 1
     ASM_ELEMENT_TYPE_POINTER = 2
@@ -110,7 +113,6 @@ class CompilerStateMachine():
         self.asm += f"LND $mlvc_program_start JMP\n\n"
 
         for token in self.tokens:
-            self.state = self.state_stack[-1]
             self.process(token)
 
         return self.asm
@@ -129,6 +131,9 @@ class CompilerStateMachine():
             self.define_builder_content = []
             self.define_builder_name = None
         
+        elif token == "include":
+            self.state_stack.append(self.STATE_INCLUDE)
+
         elif token == "var":
             self.state_stack.append(self.STATE_VAR)
         
@@ -168,6 +173,8 @@ class CompilerStateMachine():
             self.expression_builder = []
 
     def process(self, token):
+        self.state = self.state_stack[-1]
+
         if token == "\n":
             self.cur_line += 1
 
@@ -180,7 +187,6 @@ class CompilerStateMachine():
 
         elif token in self.defines:
             for dtoken in self.defines[token]:
-                self.state = self.state_stack[-1]
                 self.process(dtoken)
 
         elif self.state == self.STATE_DEFINE:
@@ -204,6 +210,21 @@ class CompilerStateMachine():
         
         elif re.match(WHITESPACE_RE, token):
             pass
+            
+        elif self.state == self.STATE_INCLUDE:
+            if not re.match(SYMBOL_RE, token):
+                if token == ";":
+                    self.state_stack.pop(-1)
+                else:
+                    self.syntax_error("Malformed module name!")
+            else:
+                with open(os.path.join(cwd, f"{token}.mlvc"), "r") as include_file:
+                    include_file_text = include_file.read()
+                    include_file_tokens = file_to_tokens(include_file_text)
+                    self.state_stack.append(self.STATE_NONE)
+
+                    for token in include_file_tokens:
+                        self.process(token)
 
         elif self.state == self.STATE_VAR:
             if not re.match(SYMBOL_RE, token):
@@ -477,7 +498,9 @@ class CompilerStateMachine():
     def function_call(self, fname):
         self.asm += f"    LND ${self.asm_prefix_function(fname)} SRT /* Calling MLVC function {fname} */\n"
 
-csm = CompilerStateMachine(tokens)
+cwd = os.path.join(*os.path.split(input_file)[:-1])
+
+csm = CompilerStateMachine(file_to_tokens(mlvc_script))
 
 asm = csm.generate()
 

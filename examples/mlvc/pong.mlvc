@@ -1,17 +1,7 @@
-define REG_X 0x6000;
-define REG_Y 0x6001;
-define REG_C 0x6002;
-define REG_F 0x6003;
-define REG_CL 0x6004;
+include graphics;
 
 define BUTTON_L 0x1;
 define BUTTON_R 0x2;
-define BUTTON_U 0x4;
-define BUTTON_D 0x8;
-define BUTTON_A 0x10;
-define BUTTON_S 0x20;
-define BUTTON_Z 0x40;
-define BUTTON_X 0x80;
 define GAMEPAD_REG 0x6080;
 
 define PADDLE_WIDTH 10;
@@ -27,52 +17,6 @@ fn gamepad {
     asm {
         #LND GAMEPAD_REG #RDA
         #LND @gamepad_ret #WRA
-    }
-}
-
-
-fn screen_clear {
-    set REG_CL = 1;
-}
-
-fn screen_flip {
-    set REG_F = 1;
-}
-
-var pix_x pix_y pix_c;
-fn set_pixel {
-    set REG_X = pix_x;
-    set REG_Y = pix_y;
-    set REG_C = pix_c;
-}
-
-var rect_x rect_y rect_w rect_h rect_c _rect_i _rect_j;
-fn draw_rect {
-    set _rect_i = 0;
-    set _rect_j = 0;
-    while _rect_i < rect_w {
-        while _rect_j < rect_h {
-            set pix_x = rect_x + _rect_i;
-            set pix_y = rect_y + _rect_j;
-            set pix_c = rect_c;
-            call set_pixel;
-            set _rect_j = _rect_j + 1;
-        }
-        set _rect_j = 0;
-        set _rect_i = _rect_i + 1;
-    }
-}
-
-var _wait_h _wait_l wait_f;
-fn wait {
-    set _wait_h = 0;
-    set _wait_l = 0;
-    while _wait_h < wait_f {
-        while _wait_l < 0x20 {
-            set _wait_l = _wait_l + 1;
-        }
-        set _wait_l = 0;
-        set _wait_h = _wait_h + 1;
     }
 }
 
@@ -144,6 +88,4 @@ while 1 {
 
     /* Frame update */
     call screen_flip;
-    set wait_f = 120;
-    call wait;
 }
