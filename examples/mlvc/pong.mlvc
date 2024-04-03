@@ -1,0 +1,149 @@
+define REG_X 0x6000;
+define REG_Y 0x6001;
+define REG_C 0x6002;
+define REG_F 0x6003;
+define REG_CL 0x6004;
+
+define BUTTON_L 0x1;
+define BUTTON_R 0x2;
+define BUTTON_U 0x4;
+define BUTTON_D 0x8;
+define BUTTON_A 0x10;
+define BUTTON_S 0x20;
+define BUTTON_Z 0x40;
+define BUTTON_X 0x80;
+define GAMEPAD_REG 0x6080;
+
+define PADDLE_WIDTH 10;
+define PADDLE_HEIGHT 2;
+define BALL_SIZE 3;
+define SCREEN_SIZE 64;
+define PADDLE_Y 60;
+
+var ball_x ball_y paddle_x ball_vx ball_vy score;
+
+var gamepad_ret;
+fn gamepad {
+    asm {
+        #LND GAMEPAD_REG #RDA
+        #LND @gamepad_ret #WRA
+    }
+}
+
+
+fn screen_clear {
+    set REG_CL = 1;
+}
+
+fn screen_flip {
+    set REG_F = 1;
+}
+
+var pix_x pix_y pix_c;
+fn set_pixel {
+    set REG_X = pix_x;
+    set REG_Y = pix_y;
+    set REG_C = pix_c;
+}
+
+var rect_x rect_y rect_w rect_h rect_c _rect_i _rect_j;
+fn draw_rect {
+    set _rect_i = 0;
+    set _rect_j = 0;
+    while _rect_i < rect_w {
+        while _rect_j < rect_h {
+            set pix_x = rect_x + _rect_i;
+            set pix_y = rect_y + _rect_j;
+            set pix_c = rect_c;
+            call set_pixel;
+            set _rect_j = _rect_j + 1;
+        }
+        set _rect_j = 0;
+        set _rect_i = _rect_i + 1;
+    }
+}
+
+var _wait_h _wait_l wait_f;
+fn wait {
+    set _wait_h = 0;
+    set _wait_l = 0;
+    while _wait_h < wait_f {
+        while _wait_l < 0x20 {
+            set _wait_l = _wait_l + 1;
+        }
+        set _wait_l = 0;
+        set _wait_h = _wait_h + 1;
+    }
+}
+
+fn exit {
+    asm { #HLT }
+}
+
+begin
+
+set score = 0;
+set ball_x = 30;
+set ball_y = 10;
+set ball_vx = 1;
+set ball_vy = 1;
+set paddle_x = 2;
+
+while 1 {
+    call screen_clear;
+    call gamepad;
+
+    if gamepad_ret & BUTTON_R && paddle_x < (SCREEN_SIZE-PADDLE_WIDTH) {
+        set paddle_x = paddle_x + 1;
+    }
+
+    if gamepad_ret & BUTTON_L && paddle_x > 0 {
+        set paddle_x = paddle_x - 1;
+    }
+
+    set ball_x = ball_x + ball_vx;
+    set ball_y = ball_y + ball_vy;
+
+    if ball_x == (SCREEN_SIZE - BALL_SIZE) && ball_vx == 1 { /* Right edge */
+        set ball_vx = 0xFF;
+    }
+    
+    if ball_x == 0 && ball_vx == 0xFF { /* Left edge */
+        set ball_vx = 1;
+    }
+
+    if ball_y == 0 && ball_vy == 0xFF { /* Top edge */
+        set ball_vy = 1;
+        set score = score + 1;
+    }
+
+    if /* Paddle Collisions */
+        ball_y == (PADDLE_Y - BALL_SIZE)
+        && ball_vy == 1
+        && (ball_x + BALL_SIZE) > paddle_x
+        && ball_x < (paddle_x + PADDLE_WIDTH + BALL_SIZE) 
+    {
+        set ball_vy = 0xFF;
+    }
+
+    if ball_y == SCREEN_SIZE { /* Bottom edge */
+        call exit;
+    }
+
+    /* Draw ball */
+    set rect_x = ball_x; set rect_y = ball_y; set rect_w = 3; set rect_h = 3; set rect_c = 0xF7;
+    call draw_rect;
+    
+    /* Draw paddle */
+    set rect_x = paddle_x; set rect_y = PADDLE_Y; set rect_w = PADDLE_WIDTH; set rect_h = PADDLE_HEIGHT; set rect_c = 0xE4;
+    call draw_rect;
+
+    /* Draw score */
+    set rect_x = 1; set rect_y = 1; set rect_w = score; set rect_h = 1; set rect_c = 0b11111001;
+    call draw_rect;
+
+    /* Frame update */
+    call screen_flip;
+    set wait_f = 120;
+    call wait;
+}

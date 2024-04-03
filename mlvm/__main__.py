@@ -2,6 +2,7 @@ from mlvm.bus import MLVMBus
 from mlvm.memory import MLVMMemoryRO, MLVMMemoryRW
 from mlvm.processor import MLVMProcessor
 from mlvm.video import MLVMVideoInterface
+from mlvm.gamepad import MLVMGamepad
 from mlvm.const import *
 
 import sys
@@ -17,7 +18,6 @@ bus = MLVMBus()
 cpu = MLVMProcessor(bus)
 ram = MLVMMemoryRW(bus, RAM_START, RAM_SIZE)
 rom = MLVMMemoryRO(bus, ROM_START, ROM_SIZE)
-
 try:
     with open(input_file, "rb") as input_stream:
         rom.load_file(input_stream)
@@ -25,8 +25,8 @@ except:
     print(f"Failed to open {input_file}!")
     exit(1)
 
-cpu = MLVMProcessor(bus)
 gpu = MLVMVideoInterface(bus, PERIPH_ID_VIDEO)
+pad = MLVMGamepad(bus, PERIPH_ID_GAMEPAD)
 
 bus.reset()
 

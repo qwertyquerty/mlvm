@@ -1,5 +1,4 @@
 import re
-import mlvm.instructions
 from mlvm.const import *
 import sys
 from mlvm.const import *
@@ -9,17 +8,17 @@ EXPRESSION_UNARY_OPERATORS = (
 )
 
 EXPRESSION_OPERATOR_PRECEDENCE = (
-    "==", ">=", "<=", ">", "<", "|", "^", "&", "<<", ">>", "+", "-", "*", "~"
+    "&&", "==", ">=", "<=", ">", "<", "|", "^", "&", "<<", ">>", "+", "-", "*", "~"
 )
 
 EXPRESSION_OPERATOR_INSTRUCTION_MAP = {
     "==": "CMP", ">=": "GTE", "<=": "LTE", ">": "GTC", "<": "LTC", "|": "IOR", "^": "XOR",
-    "&": "AND", "<<": "LSS", ">>": "RSS", "+": "ADD", "-": "SUB", "*": "MUL", "~": "NOT"
+    "&": "AND", "<<": "LSS", ">>": "RSS", "+": "ADD", "-": "SUB", "*": "MUL", "~": "NOT", "&&": "ANL"
 }
 
 OPERATORS = (
     "/*", "*/", "==", ">=", "<=", "=", ">>", "<<", ">", "<", "{", "}", "\"", "'", "+", "-", "*",
-    "(", ")", "&", "|", "^", "~", "#", "@", "!", "?", ";"
+    "(", ")", "&&", "&", "|", "^", "~", "#", "@", "!", "?", ";"
 )
 
 KEYWORDS = [
@@ -173,7 +172,11 @@ class CompilerStateMachine():
             self.cur_line += 1
 
         if self.state == self.STATE_COMMENT:
-            pass
+            if token == "*/":
+                self.state_stack.pop(-1)
+
+        elif token == "/*":
+            self.state_stack.append(self.STATE_COMMENT)
 
         elif token in self.defines:
             for dtoken in self.defines[token]:
@@ -318,10 +321,10 @@ class CompilerStateMachine():
             if token == "{":
                 self.loop_stack.append(self.cur_loop_id)
                 self.asm += f"loop_{self.cur_loop_id}_begin: /* Begin MLVC while block */\n"
-                self.cur_loop_id += 1
                 self.asm += "    /* MLVC if expression */\n"
                 output_register = self.solve_expression(self.expression_builder)
-                self.asm += f"    LND $loop_{self.cur_conditional_id}_end JN{output_register} /* MLVC while conditional */\n"
+                self.asm += f"    LND $loop_{self.cur_loop_id}_end JN{output_register} /* MLVC while conditional */\n"
+                self.cur_loop_id += 1
                 self.state_stack.append(self.STATE_BRACE_CONTENT)
             else:
                 self.expression_builder.append(token)
@@ -398,52 +401,76 @@ class CompilerStateMachine():
     def append_instruction(self, instruction):
         self.asm += f"    {instruction}\n"
 
-    def expression_to_rpn(self, expression, minprec=0):
-        rpn = [expression.pop()]
+    def infix_to_rpn(self, expression):
+        output = []
+        stack = []
 
-        while len(expression) > 0:
-            prec = EXPRESSION_OPERATOR_PRECEDENCE.index(expression[-1])
-            if prec < minprec: break
+        for token in expression:
+            if token in EXPRESSION_OPERATOR_PRECEDENCE:
+                while len(stack) and stack[-1] != "(" and stack[-1] in EXPRESSION_OPERATOR_PRECEDENCE and EXPRESSION_OPERATOR_PRECEDENCE.index(token) <= EXPRESSION_OPERATOR_PRECEDENCE.index(stack[-1]):
+                    output.append(stack.pop())
 
-            op = expression.pop()
+                stack.append(token)
+            
+            elif token == "(":
+                stack.append("(")
 
-            lhs = self.expression_to_rpn(expression, prec+1)
-            rpn = lhs + rpn
-            rpn.append(op)
-        
-        return rpn
+            elif token == ")":
+                while len(stack) and stack[-1] != "(":
+                    output.append(stack.pop())
+                
+                if stack.pop() != "(":
+                    self.syntax_error("Mismatched parentheses!")
+
+            else:
+                output.append(token)
+
+        while len(stack):
+            if stack[-1] == "(" or stack[-1] == ")":
+                self.syntax_error("Mismatched parentheses!")
+
+            output.append(stack.pop())
+
+        return output
 
     def solve_expression(self, expression):
         if len(expression) == 0:
             self.syntax_error("Cannot solve empty expression!")
 
-        rpn = self.expression_to_rpn(expression.copy())
-        args_regs = ["A", "B"]
-        arg_n = 0
+        rpn = self.infix_to_rpn(expression.copy())
         output_register = None
 
-        for element in rpn:
-            if element in EXPRESSION_OPERATOR_PRECEDENCE:
-                self.append_instruction(EXPRESSION_OPERATOR_INSTRUCTION_MAP[element])
-                self.append_instruction(f"S{args_regs[arg_n]}C")
-                output_register = args_regs[arg_n]
-                arg_n = (arg_n + 1) % 2
+        stack = []
 
-            elif re.match(VALUE_RE, element):
-                self.append_instruction(f"LN{args_regs[arg_n]} {element}")
-                output_register = args_regs[arg_n]
-                
-                arg_n = (arg_n + 1) % 2
+        def get_element(e, reg):
+            if e is None:
+                self.append_instruction(f"PUL S{reg}C")
+            elif re.match(VALUE_RE, e):
+                self.append_instruction(f"LN{reg} {e}")
+            elif re.match(SYMBOL_RE, e):
+                if not e in self.static_vars:
+                    self.syntax_error(f"Undefined symbol: {e}!")
 
-            elif re.match(SYMBOL_RE, element):
-                if not element in self.static_vars:
-                    self.syntax_error(f"Undefined symbol: {element}!")
-                self.append_instruction(f"LND ${self.asm_prefix_var(element)} RD{args_regs[arg_n]}")
-                output_register = args_regs[arg_n]
-                arg_n = (arg_n + 1) % 2
-            
+                self.append_instruction(f"LND ${self.asm_prefix_var(e)} RD{reg}")
             else:
                 self.syntax_error("Bad expression!")
+
+        for i, element in enumerate(rpn):
+            if element in EXPRESSION_OPERATOR_PRECEDENCE:
+                get_element(stack.pop(), "B")
+                get_element(stack.pop(), "A")
+                self.append_instruction(EXPRESSION_OPERATOR_INSTRUCTION_MAP[element])
+                if i == (len(rpn) - 1):
+                    output_register = "C"
+                else:
+                    self.append_instruction("PSH")
+                    stack.append(None) # Pushed onto real stack, pull off later
+            else:
+                stack.append(element)
+
+        if len(stack):
+            get_element(stack.pop(), "A")
+            output_register = "A"
 
         return output_register
 

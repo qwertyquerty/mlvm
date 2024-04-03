@@ -246,13 +246,19 @@ INSTRUCTIONS[0x4D] = LTC = [
     lambda cpu: setattr(cpu, "reg_c", int(cpu.reg_a < cpu.reg_b))
 ]
 
+# logical and
+
+INSTRUCTIONS[0x4E] = ANL = [
+    lambda cpu: setattr(cpu, "reg_c", int(cpu.reg_a and cpu.reg_b))
+]
+
 
 # Stack operations and jumps
 
 INSTRUCTIONS[0x50] = PSH = [
     lambda cpu: (
         (print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...,
-        cpu.bus.write(STACK_START_ADDR + cpu.reg_t, cpu.reg_a),
+        cpu.bus.write(STACK_START_ADDR + cpu.reg_t, cpu.reg_c),
         setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF)
     ),
     None
@@ -264,7 +270,7 @@ INSTRUCTIONS[0x51] = PUL = [
         setattr(cpu, "reg_t", (cpu.reg_t - 1) & 0xFFFF),
         cpu.bus.read(STACK_START_ADDR + cpu.reg_t)
     ),
-    lambda cpu: setattr(cpu, "reg_a", cpu.bus.data)
+    lambda cpu: setattr(cpu, "reg_c", cpu.bus.data)
 ]
 
 INSTRUCTIONS[0x52] = SRT = [
@@ -403,5 +409,13 @@ INSTRUCTIONS[0xE0] = HLT = [
 # Debug
 
 INSTRUCTIONS[0xF0] = DLA = [
-    lambda cpu: print("DEBUG LOG:", cpu.reg_a)
+    lambda cpu: print("A:", cpu.reg_a)
+]
+
+INSTRUCTIONS[0xF1] = DLB = [
+    lambda cpu: print("B:", cpu.reg_b)
+]
+
+INSTRUCTIONS[0xF2] = DLC = [
+    lambda cpu: print("C:", cpu.reg_c)
 ]
