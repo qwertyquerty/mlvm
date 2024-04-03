@@ -14,6 +14,7 @@ if len(sys.argv) < 2:
 input_file = sys.argv[1]
 
 bus = MLVMBus()
+cpu = MLVMProcessor(bus)
 ram = MLVMMemoryRW(bus, RAM_START, RAM_SIZE)
 rom = MLVMMemoryRO(bus, ROM_START, ROM_SIZE)
 
@@ -35,5 +36,5 @@ i = 0
 while True:
     bus.tick()
     i += 1
-    if i % 100_000 == 0:
+    if i % 1_000_000 == 0:
         print(f"{i / (time.time() - start_time):,.0f} cycles/s")
