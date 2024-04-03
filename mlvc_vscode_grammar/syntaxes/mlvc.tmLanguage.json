@@ -1,0 +1,36 @@
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"name": "mlvc",
+	"patterns": [
+		{
+			"name": "keyword.control.mlvc",
+			"match": "\\b(if|else|halt|return|while|set|define|include|begin|fn|var|call|asm)\\b"
+		},
+		{
+			"name": "keyword.operator.mlvc",
+			"match": "(\\=\\=|\\>\\=|\\<\\=|\\=|\\>\\>|\\<\\<|\\>|\\<|\\+|\\-|\\*|\\(|\\)|\\&\\&|\\&|\\||\\^|\\~|\\#|\\@|\\!|\\?)"
+		},
+		{
+			"name": "comment.block.mlvc",
+			"begin": "\\/\\*",
+			"end": "\\*\\/"
+		},
+		{
+			"name": "constant.numeric.mlvc",
+			"match": "(0x[0-9A-Fa-f]+|0b[01]+|-?[0-9]+)"
+		},
+		{
+			"match": "\\s#([A-Z]{3})\\s",
+			"name": "support.function.builtin.mlvc"
+		},
+		{
+			"match": "call\\s+([a-zA-Z\\_]+[a-zA-Z0-9\\_]*)",
+			"name": "support.function.builtin.mlvc"
+		},
+		{
+			"name": "variable.other.readwrite.mlvc",
+			"match": "([a-zA-Z\\_]+[a-zA-Z0-9\\_]*)"
+		}
+	],
+	"scopeName": "source.mlvc"
+}
