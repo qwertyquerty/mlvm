@@ -13,9 +13,9 @@ var ball_x ball_y paddle_x ball_vx ball_vy score;
 begin
 
 set score = 0;
-set ball_x = 30;
-set ball_y = 10;
-set ball_vx = 1;
+set ball_x = 60;
+set ball_y = 0;
+set ball_vx = 0xFF;
 set ball_vy = 1;
 set paddle_x = 2;
 
