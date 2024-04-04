@@ -3,6 +3,7 @@ from mlvm.memory import MLVMMemoryRO, MLVMMemoryRW
 from mlvm.processor import MLVMProcessor
 from mlvm.video import MLVMVideoInterface
 from mlvm.gamepad import MLVMGamepad
+from mlvm.timer import MLVMTimer
 from mlvm.const import *
 
 import sys
@@ -27,14 +28,31 @@ except:
 
 gpu = MLVMVideoInterface(bus, PERIPH_ID_VIDEO)
 pad = MLVMGamepad(bus, PERIPH_ID_GAMEPAD)
+osc = MLVMTimer(bus, PERIPH_ID_TIMER)
 
 bus.reset()
 
-start_time = time.time()
+start_time = time.perf_counter()
+last_tick_time = time.perf_counter()
+cur_tick_time = time.perf_counter()
+
+perf_cycle_offset = 0
+perf_time_offset = 0
+
+sleep_interval = 10_000
 
 i = 0
 while True:
     bus.tick()
     i += 1
-    if i % 1_000_000 == 0:
-        print(f"{i / (time.time() - start_time):,.0f} cycles/s")
+    if i % CPU_GOAL_CLOCK == 0:
+        print(f"{(i-perf_cycle_offset) / (time.perf_counter() - perf_time_offset):,.0f} cycles/s")
+        perf_cycle_offset = i
+        perf_time_offset = time.perf_counter()
+
+    if i % sleep_interval == 0:
+        cur_tick_time = time.perf_counter()
+        while ((sleep_interval/CPU_GOAL_CLOCK) - (time.perf_counter()-last_tick_time)) > 0:
+            pass
+        
+        last_tick_time = time.perf_counter()

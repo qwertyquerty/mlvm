@@ -1,0 +1,17 @@
+define GAMEPAD_BUTTONS_REG 0x6080;
+define BUTTON_L 0x01;
+define BUTTON_R 0x02;
+define BUTTON_U 0x04;
+define BUTTON_D 0x08;
+define BUTTON_A 0x10;
+define BUTTON_S 0x20;
+define BUTTON_Z 0x40;
+define BUTTON_X 0x80;
+
+var gamepad_buttons_ret;
+fn gamepad_buttons {
+    asm {
+        #LND GAMEPAD_BUTTONS_REG #RDA
+        #LND @gamepad_buttons_ret #WRA
+    }
+}

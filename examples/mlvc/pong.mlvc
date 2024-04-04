@@ -1,28 +1,14 @@
+include gamepad;
 include graphics;
+include system;
+include time;
 
-define BUTTON_L 0x1;
-define BUTTON_R 0x2;
-define GAMEPAD_REG 0x6080;
-
-define PADDLE_WIDTH 10;
-define PADDLE_HEIGHT 2;
+define PADDLE_WIDTH 10; define PADDLE_HEIGHT 2; define PADDLE_Y 60;
 define BALL_SIZE 3;
 define SCREEN_SIZE 64;
-define PADDLE_Y 60;
+define FRAME_LENGTH_DMS 167;
 
 var ball_x ball_y paddle_x ball_vx ball_vy score;
-
-var gamepad_ret;
-fn gamepad {
-    asm {
-        #LND GAMEPAD_REG #RDA
-        #LND @gamepad_ret #WRA
-    }
-}
-
-fn exit {
-    asm { #HLT }
-}
 
 begin
 
@@ -34,14 +20,15 @@ set ball_vy = 1;
 set paddle_x = 2;
 
 while 1 {
+    call reset_timers;
     call screen_clear;
-    call gamepad;
+    call gamepad_buttons;
 
-    if gamepad_ret & BUTTON_R && paddle_x < (SCREEN_SIZE-PADDLE_WIDTH) {
+    if gamepad_buttons_ret & BUTTON_R && paddle_x < (SCREEN_SIZE-PADDLE_WIDTH) {
         set paddle_x = paddle_x + 1;
     }
 
-    if gamepad_ret & BUTTON_L && paddle_x > 0 {
+    if gamepad_buttons_ret & BUTTON_L && paddle_x > 0 {
         set paddle_x = paddle_x - 1;
     }
 
@@ -88,4 +75,8 @@ while 1 {
 
     /* Frame update */
     call screen_flip;
+
+    call get_dms_time;
+    set sleep_dms_n = FRAME_LENGTH_DMS - get_dms_time_ret;
+    call sleep_dms;
 }

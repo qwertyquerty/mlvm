@@ -106,6 +106,10 @@ INSTRUCTIONS[0x2D] = SDE = [
     )
 ]
 
+INSTRUCTIONS[0x2E] = SAS = [
+    lambda cpu: setattr(cpu, "reg_a", cpu.reg_s)
+]
+
 # Write to bus (bus[h,l] = r)
 
 INSTRUCTIONS[0x30] = WRA = [

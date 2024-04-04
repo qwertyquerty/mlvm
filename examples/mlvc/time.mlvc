@@ -1,0 +1,48 @@
+define REG_MS_OSC 0x6100;
+define REG_DMS_OSC 0x6101;
+define REG_HMS_OSC 0x6102;
+define REG_TIMER_RESET 0x610F;
+
+var sleep_ms_n _sleep_ms_p;
+fn sleep_ms {
+    set REG_TIMER_RESET = 0;
+    set _sleep_ms_p = 0;
+    while (_sleep_ms_p < sleep_ms_n) {
+        asm {
+            #LND REG_MS_OSC #RDA
+            #LND @_sleep_ms_p #WRA
+        }
+    }
+}
+
+var sleep_dms_n _sleep_dms_p;
+fn sleep_dms {
+    set REG_TIMER_RESET = 0;
+    set _sleep_dms_p = 0;
+    while (_sleep_dms_p < sleep_dms_n) {
+        asm {
+            #LND REG_DMS_OSC #RDA
+            #LND @_sleep_dms_p #WRA
+        }
+    }    
+}
+
+fn reset_timers {
+    set REG_TIMER_RESET = 0;
+}
+
+var get_ms_time_ret;
+fn get_ms_time {
+    asm {
+        #LND REG_MS_OSC #RDA
+        #LND @get_ms_time_ret #WRA
+    }
+}
+
+var get_dms_time_ret;
+fn get_dms_time {
+    asm {
+        #LND REG_DMS_OSC #RDA
+        #LND @get_dms_time_ret #WRA
+    }
+}

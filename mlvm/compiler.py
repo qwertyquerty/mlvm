@@ -218,13 +218,17 @@ class CompilerStateMachine():
                 else:
                     self.syntax_error("Malformed module name!")
             else:
-                with open(os.path.join(cwd, f"{token}.mlvc"), "r") as include_file:
+                filename = token
+                with open(os.path.join(cwd, f"{filename}.mlvc"), "r") as include_file:
+                    self.asm += f"\n/* Begin MLVC include {filename} */\n"
                     include_file_text = include_file.read()
                     include_file_tokens = file_to_tokens(include_file_text)
                     self.state_stack.append(self.STATE_NONE)
 
                     for token in include_file_tokens:
                         self.process(token)
+                    
+                    self.asm += f"\n/* End MLVC include {filename} */\n\n"
 
         elif self.state == self.STATE_VAR:
             if not re.match(SYMBOL_RE, token):
