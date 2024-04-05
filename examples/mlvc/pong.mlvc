@@ -76,6 +76,9 @@ while 1 {
     /* Frame update */
     call screen_flip;
 
+    call get_hms_time;
+    asm {#DLA}
+
     call get_dms_time;
     set sleep_dms_n = FRAME_LENGTH_DMS - get_dms_time_ret;
     call sleep_dms;

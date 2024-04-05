@@ -46,3 +46,11 @@ fn get_dms_time {
         #LND @get_dms_time_ret #WRA
     }
 }
+
+var get_hms_time_ret;
+fn get_hms_time {
+    asm {
+        #LND REG_HMS_OSC #RDA
+        #LND @get_hms_time_ret #WRA
+    }
+}

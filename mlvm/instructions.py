@@ -256,6 +256,12 @@ INSTRUCTIONS[0x4E] = ANL = [
     lambda cpu: setattr(cpu, "reg_c", int(cpu.reg_a and cpu.reg_b))
 ]
 
+# modulo
+
+INSTRUCTIONS[0x4F] = MOD = [
+    lambda cpu: setattr(cpu, "reg_c", int(cpu.reg_a % cpu.reg_b))
+]
+
 
 # Stack operations and jumps
 
