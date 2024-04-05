@@ -404,8 +404,68 @@ INSTRUCTIONS[0x5F] = JSC = [
     lambda cpu: JMP[0](cpu) if (cpu.reg_s & STATUS_CARRY) else ...
 ]
 
+INSTRUCTIONS[0x60] = JMI = [
+    lambda cpu: (setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (setattr(cpu, "reg_l", cpu.bus.data), setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (setattr(cpu, "reg_h", cpu.bus.data), setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF))
+]
+
+INSTRUCTIONS[0x61] = JAI = [
+    lambda cpu: (setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (setattr(cpu, "reg_l", cpu.bus.data), setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (setattr(cpu, "reg_h", cpu.bus.data), setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF) if cpu.reg_a else ...)
+]
+
+INSTRUCTIONS[0x62] = JBI = [
+    lambda cpu: (setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (setattr(cpu, "reg_l", cpu.bus.data), setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (setattr(cpu, "reg_h", cpu.bus.data), setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF) if cpu.reg_b else ...)
+]
+
+INSTRUCTIONS[0x63] = JCI = [
+    lambda cpu: (setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (setattr(cpu, "reg_l", cpu.bus.data), setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (setattr(cpu, "reg_h", cpu.bus.data), setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF) if cpu.reg_c else ...)
+]
+
+INSTRUCTIONS[0x64] = JXI = [
+    lambda cpu: (setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (setattr(cpu, "reg_l", cpu.bus.data), setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (setattr(cpu, "reg_h", cpu.bus.data), setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF) if not cpu.reg_a else ...)
+]
+
+INSTRUCTIONS[0x65] = JYI = [
+    lambda cpu: (setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (setattr(cpu, "reg_l", cpu.bus.data), setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (setattr(cpu, "reg_h", cpu.bus.data), setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF) if not cpu.reg_b else ...)
+]
+
+INSTRUCTIONS[0x66] = JZI = [
+    lambda cpu: (setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (setattr(cpu, "reg_l", cpu.bus.data), setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (setattr(cpu, "reg_h", cpu.bus.data), setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF) if not cpu.reg_c else ...)
+]
+
+INSTRUCTIONS[0x67] = SRI = [
+    lambda cpu: (setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (setattr(cpu, "reg_l", cpu.bus.data), setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (
+        setattr(cpu, "reg_h", cpu.bus.data),
+        (print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...,
+        cpu.bus.write(STACK_START_ADDR + cpu.reg_t, cpu.reg_p & 0xFF),
+        setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF)
+    ),
+    lambda cpu: (
+        (print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...,
+        cpu.bus.write(STACK_START_ADDR + cpu.reg_t, (cpu.reg_p >> 8) & 0xFF),
+        setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF)
+    ),
+    lambda cpu: (setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF))
+]
+
+
 # Random util
-INSTRUCTIONS[0x60] = RND = [
+INSTRUCTIONS[0x70] = RND = [
     lambda cpu: setattr(cpu, "reg_a", random.randint(0, 255))
 ]
 
@@ -429,3 +489,6 @@ INSTRUCTIONS[0xF1] = DLB = [
 INSTRUCTIONS[0xF2] = DLC = [
     lambda cpu: print("C:", cpu.reg_c)
 ]
+
+def instruction_from_name(name):
+    return globals()[name]

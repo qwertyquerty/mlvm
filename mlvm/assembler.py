@@ -106,6 +106,8 @@ for byte in output_bytes:
     print(f"0x{byte:02x}", end=" ")
     n += 1
 
+print(labels)
+
 try:
     with open(output_file, "wb") as output_stream:
         output_stream.write(bytes(output_bytes))
