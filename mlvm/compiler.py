@@ -12,44 +12,35 @@ INVERSE_REGISTERS = {
     "C": "Z"
 }
 
+# Operators with only one operand
 EXPRESSION_UNARY_OPERATORS = (
     "~"
 )
 
+
+# Order of operations, higher prededence to the right
 EXPRESSION_OPERATOR_PRECEDENCE = (
-    "&&", "==", ">=", "<=", ">", "<", "|", "^", "&", "<<", ">>", "+", "-", "*", "%", "~"
+    "&&", "==", ">=", "<=", ">", "<", "|", "^", "&", "<<", ">>", "+", "-", "*", "/", "%", "~"
 )
 
+# Mapping operators to their instruction
 EXPRESSION_OPERATOR_INSTRUCTION_MAP = {
     "==": "CMP", ">=": "GTE", "<=": "LTE", ">": "GTC", "<": "LTC", "|": "IOR", "^": "XOR",
     "&": "AND", "<<": "LSS", ">>": "RSS", "+": "ADD", "-": "SUB", "*": "MUL", "~": "NOT",
-    "&&": "ANL", "%": "MOD"
+    "&&": "ANL", "%": "MOD", "/": "DIV"
 }
 
+# List of all operators
 OPERATORS = (
     "/*", "*/", "==", ">=", "<=", "=", ">>", "<<", ">", "<", "{", "}", "\"", "'", "+", "-", "*",
-    "(", ")", "&&", "&", "|", "^", "~", "#", "@", "!", "?", ";", "%"
+    "(", ")", "&&", "&", "|", "^", "~", "#", "@", "!", "?", ";", "%", "/"
 )
 
+# List of reserved keywords
 KEYWORDS = [
     "fn", "define", "include", "var", "set", "if", "else",
     "while", "halt", "asm", "begin", "return", "call"
 ]
-
-if len(sys.argv) < 3:
-    print("You must specify an input and output file!")
-    exit(1)
-
-input_file = sys.argv[1]
-output_file = sys.argv[2]
-
-try:
-    with open(input_file, "r") as input_stream:
-        mlvc_script = input_stream.read()
-except:
-    print(f"Failed to open {input_file}!")
-    exit(1)
-
 
 def file_to_tokens(file):
     lexer_regex_s = "( |\\n"
@@ -531,19 +522,35 @@ class CompilerStateMachine():
         return output_register
 
     def function_call(self, fname):
-        self.asm += f"    SRI ${self.asm_prefix_function(fname)} /* Calling MLVC function {fname} */\n"
+        # Subroutine 
+        self.asm += f"    LND ${self.asm_prefix_function(fname)} SRT /* Calling MLVC function {fname} */\n"
 
-cwd = os.path.join(*os.path.split(input_file)[:-1])
 
-csm = CompilerStateMachine(file_to_tokens(mlvc_script))
+if __name__ == "__main__":
+    if len(sys.argv) < 3:
+        print("You must specify an input and output file!")
+        exit(1)
 
-asm = csm.generate()
+    input_file = sys.argv[1]
+    output_file = sys.argv[2]
 
-print(asm)
+    try:
+        with open(input_file, "r") as input_stream:
+            mlvc_script = input_stream.read()
+    except:
+        print(f"Failed to open {input_file}!")
+        exit(1)
 
-try:
-    with open(output_file, "w") as output_stream:
-        output_stream.write(asm)
-except:
-    print(f"Failed to open {output_file}!")
-    exit(1)
+
+    cwd = os.path.join(*os.path.split(input_file)[:-1])
+    csm = CompilerStateMachine(file_to_tokens(mlvc_script))
+    asm = csm.generate()
+
+    print(asm)
+
+    try:
+        with open(output_file, "w") as output_stream:
+            output_stream.write(asm)
+    except:
+        print(f"Failed to open {output_file}!")
+        exit(1)

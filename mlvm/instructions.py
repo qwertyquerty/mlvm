@@ -228,44 +228,51 @@ INSTRUCTIONS[0x48] = LSS = [
     lambda cpu: setattr(cpu, "reg_c", (cpu.reg_a << cpu.reg_b) & 0xFF)
 ]
 
-# comparisons
-
-INSTRUCTIONS[0x49] = CMP = [
-    lambda cpu: setattr(cpu, "reg_c", int(cpu.reg_a == cpu.reg_b))
-]
-
-INSTRUCTIONS[0x4A] = GTE = [
-    lambda cpu: setattr(cpu, "reg_c", int(cpu.reg_a >= cpu.reg_b))
-]
-
-INSTRUCTIONS[0x4B] = LTE = [
-    lambda cpu: setattr(cpu, "reg_c", int(cpu.reg_a <= cpu.reg_b))
-]
-
-INSTRUCTIONS[0x4C] = GTC = [
-    lambda cpu: setattr(cpu, "reg_c", int(cpu.reg_a > cpu.reg_b))
-]
-
-INSTRUCTIONS[0x4D] = LTC = [
-    lambda cpu: setattr(cpu, "reg_c", int(cpu.reg_a < cpu.reg_b))
-]
-
 # logical and
 
-INSTRUCTIONS[0x4E] = ANL = [
+INSTRUCTIONS[0x49] = ANL = [
     lambda cpu: setattr(cpu, "reg_c", int(cpu.reg_a and cpu.reg_b))
 ]
 
 # modulo
 
-INSTRUCTIONS[0x4F] = MOD = [
+INSTRUCTIONS[0x4A] = MOD = [
     lambda cpu: setattr(cpu, "reg_c", int(cpu.reg_a % cpu.reg_b))
+]
+
+# integer division
+
+INSTRUCTIONS[0x4B] = DIV = [
+    lambda cpu: setattr(cpu, "reg_c", int(cpu.reg_a // cpu.reg_b))
+]
+
+
+# comparisons
+
+INSTRUCTIONS[0x50] = CMP = [
+    lambda cpu: setattr(cpu, "reg_c", int(cpu.reg_a == cpu.reg_b))
+]
+
+INSTRUCTIONS[0x51] = GTE = [
+    lambda cpu: setattr(cpu, "reg_c", int(cpu.reg_a >= cpu.reg_b))
+]
+
+INSTRUCTIONS[0x52] = LTE = [
+    lambda cpu: setattr(cpu, "reg_c", int(cpu.reg_a <= cpu.reg_b))
+]
+
+INSTRUCTIONS[0x53] = GTC = [
+    lambda cpu: setattr(cpu, "reg_c", int(cpu.reg_a > cpu.reg_b))
+]
+
+INSTRUCTIONS[0x54] = LTC = [
+    lambda cpu: setattr(cpu, "reg_c", int(cpu.reg_a < cpu.reg_b))
 ]
 
 
 # Stack operations and jumps
 
-INSTRUCTIONS[0x50] = PSH = [
+INSTRUCTIONS[0x60] = PSH = [
     lambda cpu: (
         (print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...,
         cpu.bus.write(STACK_START_ADDR + cpu.reg_t, cpu.reg_c),
@@ -274,7 +281,7 @@ INSTRUCTIONS[0x50] = PSH = [
     None
 ]
 
-INSTRUCTIONS[0x51] = PUL = [
+INSTRUCTIONS[0x61] = PUL = [
     lambda cpu: (
         (print("STACK UNDERFLOW"), exit(ERR_STACK_UNDERFLOW)) if cpu.reg_t == 0 else ...,
         setattr(cpu, "reg_t", (cpu.reg_t - 1) & 0xFFFF),
@@ -283,7 +290,7 @@ INSTRUCTIONS[0x51] = PUL = [
     lambda cpu: setattr(cpu, "reg_c", cpu.bus.data)
 ]
 
-INSTRUCTIONS[0x52] = SRT = [
+INSTRUCTIONS[0x62] = SRT = [
     lambda cpu: (
         (print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...,
         cpu.bus.write(STACK_START_ADDR + cpu.reg_t, cpu.reg_p & 0xFF),
@@ -297,7 +304,7 @@ INSTRUCTIONS[0x52] = SRT = [
     lambda cpu: setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF)
 ]
 
-INSTRUCTIONS[0x53] = SRC = [
+INSTRUCTIONS[0x63] = SRC = [
     lambda cpu: (
         (print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...,
         cpu.bus.write(STACK_START_ADDR + cpu.reg_t, cpu.reg_p & 0xFF),
@@ -311,7 +318,7 @@ INSTRUCTIONS[0x53] = SRC = [
     lambda cpu: (setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF)) if cpu.reg_s & STATUS_CARRY else ...
 ]
 
-INSTRUCTIONS[0x54] = SIA = [
+INSTRUCTIONS[0x64] = SIA = [
     lambda cpu: (
         (print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...,
         cpu.bus.write(STACK_START_ADDR + cpu.reg_t, cpu.reg_p & 0xFF),
@@ -325,7 +332,7 @@ INSTRUCTIONS[0x54] = SIA = [
     lambda cpu: (setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF)) if cpu.reg_a else ...
 ]
 
-INSTRUCTIONS[0x55] = SIB = [
+INSTRUCTIONS[0x65] = SIB = [
     lambda cpu: (
         (print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...,
         cpu.bus.write(STACK_START_ADDR + cpu.reg_t, cpu.reg_p & 0xFF),
@@ -339,7 +346,7 @@ INSTRUCTIONS[0x55] = SIB = [
     lambda cpu: (setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF)) if cpu.reg_b else ...
 ]
 
-INSTRUCTIONS[0x56] = SIC = [
+INSTRUCTIONS[0x66] = SIC = [
     lambda cpu: (
         (print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...,
         cpu.bus.write(STACK_START_ADDR + cpu.reg_t, cpu.reg_p & 0xFF),
@@ -354,7 +361,7 @@ INSTRUCTIONS[0x56] = SIC = [
 ]
 
 
-INSTRUCTIONS[0x57] = RET = [
+INSTRUCTIONS[0x67] = RET = [
     lambda cpu: (
         (print("STACK UNDERFLOW"), exit(ERR_STACK_UNDERFLOW)) if cpu.reg_t == 0 else ...,
         setattr(cpu, "reg_t", (cpu.reg_t - 1) & 0xFFFF),
@@ -372,81 +379,81 @@ INSTRUCTIONS[0x57] = RET = [
     )
 ]
 
-INSTRUCTIONS[0x58] = JMP = [
+INSTRUCTIONS[0x68] = JMP = [
     lambda cpu: setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF)
 ]
 
-INSTRUCTIONS[0x59] = JIA = [
+INSTRUCTIONS[0x69] = JIA = [
     lambda cpu: JMP[0](cpu) if cpu.reg_a else ...
 ]
 
-INSTRUCTIONS[0x5A] = JIB = [
+INSTRUCTIONS[0x6A] = JIB = [
     lambda cpu: JMP[0](cpu) if cpu.reg_b else ...
 ]
 
-INSTRUCTIONS[0x5B] = JIC = [
+INSTRUCTIONS[0x6B] = JIC = [
     lambda cpu: JMP[0](cpu) if cpu.reg_c else ...
 ]
 
-INSTRUCTIONS[0x5C] = JNA = [
+INSTRUCTIONS[0x6C] = JNA = [
     lambda cpu: JMP[0](cpu) if not cpu.reg_a else ...
 ]
 
-INSTRUCTIONS[0x5D] = JNB = [
+INSTRUCTIONS[0x6D] = JNB = [
     lambda cpu: JMP[0](cpu) if not cpu.reg_b else ...
 ]
 
-INSTRUCTIONS[0x5E] = JNC = [
+INSTRUCTIONS[0x6E] = JNC = [
     lambda cpu: JMP[0](cpu) if not cpu.reg_c else ...
 ]
 
-INSTRUCTIONS[0x5F] = JSC = [
+INSTRUCTIONS[0x6F] = JSC = [
     lambda cpu: JMP[0](cpu) if (cpu.reg_s & STATUS_CARRY) else ...
 ]
 
-INSTRUCTIONS[0x60] = JMI = [
+INSTRUCTIONS[0x70] = JMI = [
     lambda cpu: (setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
     lambda cpu: (setattr(cpu, "reg_l", cpu.bus.data), setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
     lambda cpu: (setattr(cpu, "reg_h", cpu.bus.data), setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF))
 ]
 
-INSTRUCTIONS[0x61] = JAI = [
+INSTRUCTIONS[0x71] = JAI = [
     lambda cpu: (setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
     lambda cpu: (setattr(cpu, "reg_l", cpu.bus.data), setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
     lambda cpu: (setattr(cpu, "reg_h", cpu.bus.data), setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF) if cpu.reg_a else ...)
 ]
 
-INSTRUCTIONS[0x62] = JBI = [
+INSTRUCTIONS[0x72] = JBI = [
     lambda cpu: (setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
     lambda cpu: (setattr(cpu, "reg_l", cpu.bus.data), setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
     lambda cpu: (setattr(cpu, "reg_h", cpu.bus.data), setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF) if cpu.reg_b else ...)
 ]
 
-INSTRUCTIONS[0x63] = JCI = [
+INSTRUCTIONS[0x73] = JCI = [
     lambda cpu: (setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
     lambda cpu: (setattr(cpu, "reg_l", cpu.bus.data), setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
     lambda cpu: (setattr(cpu, "reg_h", cpu.bus.data), setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF) if cpu.reg_c else ...)
 ]
 
-INSTRUCTIONS[0x64] = JXI = [
+INSTRUCTIONS[0x74] = JXI = [
     lambda cpu: (setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
     lambda cpu: (setattr(cpu, "reg_l", cpu.bus.data), setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
     lambda cpu: (setattr(cpu, "reg_h", cpu.bus.data), setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF) if not cpu.reg_a else ...)
 ]
 
-INSTRUCTIONS[0x65] = JYI = [
+INSTRUCTIONS[0x75] = JYI = [
     lambda cpu: (setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
     lambda cpu: (setattr(cpu, "reg_l", cpu.bus.data), setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
     lambda cpu: (setattr(cpu, "reg_h", cpu.bus.data), setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF) if not cpu.reg_b else ...)
 ]
 
-INSTRUCTIONS[0x66] = JZI = [
+INSTRUCTIONS[0x76] = JZI = [
     lambda cpu: (setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
     lambda cpu: (setattr(cpu, "reg_l", cpu.bus.data), setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
     lambda cpu: (setattr(cpu, "reg_h", cpu.bus.data), setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF) if not cpu.reg_c else ...)
 ]
 
-INSTRUCTIONS[0x67] = SRI = [
+INSTRUCTIONS[0x77] = SRI = [
     lambda cpu: (setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
     lambda cpu: (setattr(cpu, "reg_l", cpu.bus.data), setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
     lambda cpu: (
@@ -465,7 +472,7 @@ INSTRUCTIONS[0x67] = SRI = [
 
 
 # Random util
-INSTRUCTIONS[0x70] = RND = [
+INSTRUCTIONS[0x80] = RND = [
     lambda cpu: setattr(cpu, "reg_a", random.randint(0, 255))
 ]
 
