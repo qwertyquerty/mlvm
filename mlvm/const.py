@@ -40,3 +40,6 @@ ROM_SIZE = 0x8000
 
 # The goal clock speed to maintain
 CPU_GOAL_CLOCK = 3_000_000
+
+# How many cycles should pass before we sleep to maintain clock speed
+CPU_SLEEP_INTERVAL = 10_000
