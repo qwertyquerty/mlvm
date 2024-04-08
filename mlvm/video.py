@@ -7,6 +7,9 @@ os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
 import pygame as pg
 import colorsys
 
+VIDEO_WIDTH = 0x40
+VIDEO_HEIGHT = 0x40
+
 REG_X_POS = 0x00
 REG_Y_POS = 0x01
 REG_COLOR = 0x02
@@ -18,6 +21,10 @@ EVENT_CYCLE_INTERVAL = 1000
 DISPLAY_SCALE = 8
 
 def byte_to_rgb(color_byte):
+    """
+    Convert a pseudo-HSV byte to RGB
+    """
+    
     hv = color_byte & 0b11111000
 
     if hv == 0b00111000:
@@ -40,6 +47,12 @@ def byte_to_rgb(color_byte):
 
 
 class MLVMVideoInterface(Peripheral):
+    """
+    Video peripheral
+
+    Opens up a display that can be drawn to and updated
+    """
+    
     def __init__(self, bus, peripheral_id):
         super().__init__(bus, peripheral_id)
         self.video_ram = [0x00 for i in range(VIDEO_WIDTH*VIDEO_HEIGHT)]
@@ -72,23 +85,23 @@ class MLVMVideoInterface(Peripheral):
         if self.bus.address in self.addr_range and self.bus.intent == WRITE:
             reg = self.unoffset_addr(self.bus.address)
             
-            if reg == REG_X_POS:
+            if reg == REG_X_POS: # Set X position
                 self.reg_x = self.bus.data % VIDEO_WIDTH
 
-            elif reg == REG_Y_POS:
+            elif reg == REG_Y_POS: # Set Y position
                 self.reg_y = self.bus.data % VIDEO_HEIGHT
 
-            elif reg == REG_COLOR:
+            elif reg == REG_COLOR: # Write pixel of this color at X and Y
                 self.reg_c = self.bus.data
                 self.set_pixel(self.reg_x, self.reg_y, self.reg_c)
 
-            elif reg == REG_FLIP:
+            elif reg == REG_FLIP: # Update the double buffered screen, flip
                 pg.transform.scale_by(self.surface, DISPLAY_SCALE, self.screen)
                 pg.display.flip()
                 self.clock.tick(-1)
                 pg.display.set_caption(f"MLVM FPS: {int(self.clock.get_fps())}")
             
-            elif reg == REG_FILL:
+            elif reg == REG_FILL: # Fill the screen with this color
                 self.fill(self.bus.data)
         
         if self.bus.cycle % EVENT_CYCLE_INTERVAL == 0:
