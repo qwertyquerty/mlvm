@@ -24,14 +24,17 @@ while 1 {
     call screen_clear;
     call gp_buttons;
 
+    /* Right button */
     if gp_buttons_ret & GP_BUTTON_R && paddle_x < (SCREEN_SIZE-PADDLE_WIDTH) {
         set paddle_x = paddle_x + 1;
     }
 
+    /* Left button */
     if gp_buttons_ret & GP_BUTTON_L && paddle_x > 0 {
         set paddle_x = paddle_x - 1;
     }
 
+    /* Move ball */
     set ball_x = ball_x + ball_vx;
     set ball_y = ball_y + ball_vy;
 
@@ -48,6 +51,10 @@ while 1 {
         set score = score + 1;
     }
 
+    if (ball_y + BALL_SIZE) == SCREEN_SIZE { /* Bottom edge */
+        call exit;
+    }
+
     if /* Paddle Collisions */
         ball_y == (PADDLE_Y - BALL_SIZE)
         && ball_vy == 1
@@ -55,10 +62,6 @@ while 1 {
         && ball_x < (paddle_x + PADDLE_WIDTH + BALL_SIZE) 
     {
         set ball_vy = 0xFF;
-    }
-
-    if ball_y == SCREEN_SIZE { /* Bottom edge */
-        call exit;
     }
 
     /* Draw ball */
@@ -76,9 +79,7 @@ while 1 {
     /* Frame update */
     call screen_flip;
 
-    call get_hms_time;
-    asm {#DLA}
-
+    /* Sleep to maintain constant FPS */
     call get_dms_time;
     set sleep_dms_n = FRAME_LENGTH_DMS - get_dms_time_ret;
     call sleep_dms;
