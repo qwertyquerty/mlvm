@@ -1,17 +1,17 @@
-define GAMEPAD_BUTTONS_REG 0x6080;
-define BUTTON_L 0x01;
-define BUTTON_R 0x02;
-define BUTTON_U 0x04;
-define BUTTON_D 0x08;
-define BUTTON_A 0x10;
-define BUTTON_S 0x20;
-define BUTTON_Z 0x40;
-define BUTTON_X 0x80;
+define GP_BUTTONS_REG 0x6080;
+define GP_BUTTON_L 0x01;
+define GP_BUTTON_R 0x02;
+define GP_BUTTON_U 0x04;
+define GP_BUTTON_D 0x08;
+define GP_BUTTON_A 0x10;
+define GP_BUTTON_S 0x20;
+define GP_BUTTON_Z 0x40;
+define GP_BUTTON_X 0x80;
 
-var gamepad_buttons_ret;
-fn gamepad_buttons {
+var gp_buttons_ret;
+fn gp_buttons {
     asm {
-        #LND GAMEPAD_BUTTONS_REG #RDA
-        #LND @gamepad_buttons_ret #WRA
+        #LND GP_BUTTONS_REG #RDA
+        #LND @gp_buttons_ret #WRA
     }
 }

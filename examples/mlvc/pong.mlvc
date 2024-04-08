@@ -22,13 +22,13 @@ set paddle_x = 2;
 while 1 {
     call reset_timers;
     call screen_clear;
-    call gamepad_buttons;
+    call gp_buttons;
 
-    if gamepad_buttons_ret & BUTTON_R && paddle_x < (SCREEN_SIZE-PADDLE_WIDTH) {
+    if gp_buttons_ret & GP_BUTTON_R && paddle_x < (SCREEN_SIZE-PADDLE_WIDTH) {
         set paddle_x = paddle_x + 1;
     }
 
-    if gamepad_buttons_ret & BUTTON_L && paddle_x > 0 {
+    if gp_buttons_ret & GP_BUTTON_L && paddle_x > 0 {
         set paddle_x = paddle_x - 1;
     }
 
