@@ -4,7 +4,7 @@ import random
 INSTRUCTIONS = [None for _ in range(256)]
 
 def instruction_from_name(name):
-    return globals()[name]
+    return globals()[name] if name in globals() else None
 
 def opcode_from_instruction(instruction):
     return INSTRUCTIONS.index(instruction)
