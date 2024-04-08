@@ -18,6 +18,12 @@ BUTTON_Z = 0b01000000
 BUTTON_X = 0b10000000
 
 class MLVMGamepad(Peripheral):
+    """
+    Gamepad peripheral
+
+    Returns bit pack of 8 different keyboard keys pressed status
+    """
+
     def __init__(self, bus, peripheral_id):
         super().__init__(bus, peripheral_id)
 
