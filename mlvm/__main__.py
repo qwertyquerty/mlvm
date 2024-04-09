@@ -3,7 +3,7 @@ MLVM Virtual Machine
 """
 
 from mlvm.bus import MLVMBus
-from mlvm.devices import MLVMProcessor, MLVMMemoryRO, MLVMMemoryRW, MLVMVideoInterface, MLVMGamepad, MLVMTimer
+from mlvm.devices import MLVMProcessor, MLVMMemoryRO, MLVMMemoryRW, MLVMVideoInterface, MLVMGamepad, MLVMTimer, MLVMDebugger
 from mlvm.const import *
 
 import sys
@@ -30,6 +30,8 @@ except:
 gpu = MLVMVideoInterface(bus, PERIPH_ID_VIDEO)
 pad = MLVMGamepad(bus, PERIPH_ID_GAMEPAD)
 osc = MLVMTimer(bus, PERIPH_ID_TIMER)
+
+#dbg = MLVMDebugger(bus)
 
 bus.reset()
 

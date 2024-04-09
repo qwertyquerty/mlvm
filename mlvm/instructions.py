@@ -9,6 +9,12 @@ def instruction_from_name(name):
 def opcode_from_instruction(instruction):
     return INSTRUCTIONS.index(instruction)
 
+def name_from_opcode(opcode):
+    return list(globals().keys())[list(globals().values()).index(INSTRUCTIONS[opcode])]
+
+def name_from_instruction(instruction):
+    return list(globals().keys())[list(globals().values()).index(instruction)]
+
 ### REGISTER LOADS ###
 
 # Load next byte into the A register

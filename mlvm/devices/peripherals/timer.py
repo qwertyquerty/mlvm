@@ -1,8 +1,6 @@
 from mlvm.devices import Peripheral
 from mlvm.const import *
 
-import time
-
 REG_OSC_MS = 0x00
 REG_OSC_DMS = 0x01
 REG_OSC_HMS = 0x02
