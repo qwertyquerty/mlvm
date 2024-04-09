@@ -1,5 +1,5 @@
 from mlvm.const import *
-from mlvm.device import Device
+from mlvm.devices import Device
 from mlvm.instructions import INSTRUCTIONS
 
 class MLVMProcessor(Device):

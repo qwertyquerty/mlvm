@@ -1,4 +1,4 @@
-from mlvm.device import Peripheral
+from mlvm.devices import Peripheral
 from mlvm.const import *
 
 import os

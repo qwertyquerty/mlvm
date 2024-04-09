@@ -6,7 +6,7 @@ import re
 import os
 import sys
 from mlvm.const import *
-from mlvm.processor import MLVMProcessor
+from mlvm.devices import MLVMProcessor
 from mlvm.instructions import instruction_from_name
 from mlvm.bus import MLVMBus
 

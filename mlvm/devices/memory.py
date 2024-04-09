@@ -1,4 +1,4 @@
-from mlvm.device import AddressedDevice
+from mlvm.devices import AddressedDevice
 from mlvm.const import *
 
 class MLVMMemoryRW(AddressedDevice):

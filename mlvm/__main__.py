@@ -3,11 +3,7 @@ MLVM Virtual Machine
 """
 
 from mlvm.bus import MLVMBus
-from mlvm.memory import MLVMMemoryRO, MLVMMemoryRW
-from mlvm.processor import MLVMProcessor
-from mlvm.video import MLVMVideoInterface
-from mlvm.gamepad import MLVMGamepad
-from mlvm.timer import MLVMTimer
+from mlvm.devices import MLVMProcessor, MLVMMemoryRO, MLVMMemoryRW, MLVMVideoInterface, MLVMGamepad, MLVMTimer
 from mlvm.const import *
 
 import sys

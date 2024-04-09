@@ -1,5 +1,5 @@
 from mlvm.const import *
-from mlvm.device import Device
+from mlvm.devices import Device
 
 class MLVMBus():
     def __init__(self):
