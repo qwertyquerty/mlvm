@@ -1,7 +1,7 @@
 # MLVM
 ## Modular Limited Virtual Machine
 
-A custom instruction set, assembler, and virtual machine in Python.
+A custom instruction set, assembler, compiler, and virtual machine in Python.
 
 This is a hobby project for educational purposes.
 
