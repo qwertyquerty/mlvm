@@ -3,78 +3,153 @@ import random
 
 INSTRUCTIONS = [None for _ in range(256)]
 
+
 def instruction_from_name(name):
     return globals()[name] if name in globals() else None
+
 
 def opcode_from_instruction(instruction):
     return INSTRUCTIONS.index(instruction)
 
+
 def name_from_opcode(opcode):
     return list(globals().keys())[list(globals().values()).index(INSTRUCTIONS[opcode])]
 
+
 def name_from_instruction(instruction):
     return list(globals().keys())[list(globals().values()).index(instruction)]
+
 
 ### REGISTER LOADS ###
 
 # Load next byte into the A register
 INSTRUCTIONS[0x10] = LNA = [
     # Increment program counter, read bus at program counter
-    lambda cpu: (setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (
+        setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF),
+        cpu.bus.read(cpu.reg_p),
+    ),
     # Load bus response into the A register
-    lambda cpu: setattr(cpu, "reg_a", cpu.bus.data)
+    lambda cpu: setattr(cpu, "reg_a", cpu.bus.data),
 ]
 
 # Load next byte into the B register
 INSTRUCTIONS[0x11] = LNB = [
     # Increment program counter, read bus at program counter
-    lambda cpu: (setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (
+        setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF),
+        cpu.bus.read(cpu.reg_p),
+    ),
     # Load bus response into the B register
-    lambda cpu: setattr(cpu, "reg_b", cpu.bus.data)
+    lambda cpu: setattr(cpu, "reg_b", cpu.bus.data),
 ]
 
 # Load next byte into the C register
 INSTRUCTIONS[0x12] = LNC = [
     # Increment program counter, read bus at program counter
-    lambda cpu: (setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (
+        setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF),
+        cpu.bus.read(cpu.reg_p),
+    ),
     # Load bus response into the C register
-    lambda cpu: setattr(cpu, "reg_c", cpu.bus.data)
+    lambda cpu: setattr(cpu, "reg_c", cpu.bus.data),
 ]
 
 # Load next byte into the L register
 INSTRUCTIONS[0x13] = LNL = [
     # Increment program counter, read bus at program counter
-    lambda cpu: (setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (
+        setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF),
+        cpu.bus.read(cpu.reg_p),
+    ),
     # Load bus response into the L register
-    lambda cpu: setattr(cpu, "reg_l", cpu.bus.data)
+    lambda cpu: setattr(cpu, "reg_l", cpu.bus.data),
 ]
 
 # Load next byte into the H register
 INSTRUCTIONS[0x14] = LNH = [
     # Increment program counter, read bus at program counter
-    lambda cpu: (setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (
+        setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF),
+        cpu.bus.read(cpu.reg_p),
+    ),
     # Load bus response into the H register
-    lambda cpu: setattr(cpu, "reg_h", cpu.bus.data)
+    lambda cpu: setattr(cpu, "reg_h", cpu.bus.data),
 ]
 
 # Load next two bytes into the D register (little endian)
 INSTRUCTIONS[0x15] = LND = [
     # Increment program counter, read bus at program counter
-    lambda cpu: (setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (
+        setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF),
+        cpu.bus.read(cpu.reg_p),
+    ),
     # Load bus response into the L register, increment program counter, read bus at program counter
-    lambda cpu: (setattr(cpu, "reg_l", cpu.bus.data), setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (
+        setattr(cpu, "reg_l", cpu.bus.data),
+        setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF),
+        cpu.bus.read(cpu.reg_p),
+    ),
     # Load bus response into the H register
-    lambda cpu: setattr(cpu, "reg_h", cpu.bus.data)
+    lambda cpu: setattr(cpu, "reg_h", cpu.bus.data),
 ]
 
 # Load next two bytes into the E register (little endian)
 INSTRUCTIONS[0x16] = LNE = [
     # Increment program counter, read bus at program counter
-    lambda cpu: (setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (
+        setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF),
+        cpu.bus.read(cpu.reg_p),
+    ),
     # Load bus response into the A register, increment program counter, read bus at program counter
-    lambda cpu: (setattr(cpu, "reg_a", cpu.bus.data), setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (
+        setattr(cpu, "reg_a", cpu.bus.data),
+        setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF),
+        cpu.bus.read(cpu.reg_p),
+    ),
     # Load bus response into the B register
-    lambda cpu: setattr(cpu, "reg_b", cpu.bus.data)
+    lambda cpu: setattr(cpu, "reg_b", cpu.bus.data),
+]
+
+
+### INCREMENTS ###
+
+# Increment the A register
+INSTRUCTIONS[0x18] = INA = [
+    # Increment the A register, wrapping at 0xFF
+    lambda cpu: setattr(cpu, "reg_a", (cpu.reg_a + 1) & 0xFF)
+]
+
+# Increment the B register
+INSTRUCTIONS[0x19] = INB = [
+    # Increment the B register, wrapping at 0xFF
+    lambda cpu: setattr(cpu, "reg_b", (cpu.reg_b + 1) & 0xFF)
+]
+
+# Increment the C register
+INSTRUCTIONS[0x1A] = INC = [
+    # Increment the C register, wrapping at 0xFF
+    lambda cpu: setattr(cpu, "reg_c", (cpu.reg_c + 1) & 0xFF)
+]
+
+# Increment the D register (L and H combined, little endian)
+INSTRUCTIONS[0x1B] = IND = [
+    # Increment the combined L/H value, then split it back into the L and H registers
+    lambda cpu: (
+        (d := ((cpu.reg_l | (cpu.reg_h << 8)) + 1) & 0xFFFF),
+        setattr(cpu, "reg_l", d & 0xFF),
+        setattr(cpu, "reg_h", (d >> 8) & 0xFF),
+    )
+]
+
+# Increment the E register (A and B combined, little endian)
+INSTRUCTIONS[0x1C] = INE = [
+    # Increment the combined A/B value, then split it back into the A and B registers
+    lambda cpu: (
+        (e := ((cpu.reg_a | (cpu.reg_b << 8)) + 1) & 0xFFFF),
+        setattr(cpu, "reg_a", e & 0xFF),
+        setattr(cpu, "reg_b", (e >> 8) & 0xFF),
+    )
 ]
 
 
@@ -155,19 +230,13 @@ INSTRUCTIONS[0x2B] = SHC = [
 # Set E to D
 INSTRUCTIONS[0x2C] = SED = [
     # Load the value of L into A, load the value of H into B
-    lambda cpu: (
-        setattr(cpu, "reg_a", cpu.reg_l),
-        setattr(cpu, "reg_b", cpu.reg_h)
-    )
+    lambda cpu: (setattr(cpu, "reg_a", cpu.reg_l), setattr(cpu, "reg_b", cpu.reg_h))
 ]
 
 # Set D to E
 INSTRUCTIONS[0x2D] = SDE = [
     # Load the value of A into L, load the value of B into H
-    lambda cpu: (
-        setattr(cpu, "reg_l", cpu.reg_a),
-        setattr(cpu, "reg_h", cpu.reg_b)
-    )
+    lambda cpu: (setattr(cpu, "reg_l", cpu.reg_a), setattr(cpu, "reg_h", cpu.reg_b))
 ]
 
 # Set A to S
@@ -184,7 +253,7 @@ INSTRUCTIONS[0x30] = WRA = [
     # Bus write A register at the D register
     lambda cpu: cpu.bus.write((cpu.reg_h << 8) | cpu.reg_l, cpu.reg_a),
     # Wait a clock for write to finish
-    None
+    None,
 ]
 
 # Write the B register to the address in D
@@ -192,7 +261,7 @@ INSTRUCTIONS[0x31] = WRB = [
     # Bus write B register at the D register
     lambda cpu: cpu.bus.write((cpu.reg_h << 8) | cpu.reg_l, cpu.reg_b),
     # Wait a clock for write to finish
-    None
+    None,
 ]
 
 # Write the C register to the address in D
@@ -200,7 +269,7 @@ INSTRUCTIONS[0x32] = WRC = [
     # Bus write C register at the D register
     lambda cpu: cpu.bus.write((cpu.reg_h << 8) | cpu.reg_l, cpu.reg_c),
     # Wait a clock for write to finish
-    None
+    None,
 ]
 
 # Write the E register to the address in D
@@ -210,7 +279,7 @@ INSTRUCTIONS[0x33] = WRE = [
     # Bus write B register at the D register plus one
     lambda cpu: cpu.bus.write((((cpu.reg_h << 8) | cpu.reg_l) + 1) & 0xFFFF, cpu.reg_b),
     # Wait a clock for write to finish
-    None
+    None,
 ]
 
 
@@ -221,7 +290,7 @@ INSTRUCTIONS[0x34] = RDA = [
     # Bus read at the D register
     lambda cpu: cpu.bus.read((cpu.reg_h << 8) | cpu.reg_l),
     # Load bus data lines into the A register
-    lambda cpu: setattr(cpu, "reg_a", cpu.bus.data)
+    lambda cpu: setattr(cpu, "reg_a", cpu.bus.data),
 ]
 
 # Read the bus at the D register into the B register
@@ -229,7 +298,7 @@ INSTRUCTIONS[0x35] = RDB = [
     # Bus read at the D register
     lambda cpu: cpu.bus.read((cpu.reg_h << 8) | cpu.reg_l),
     # Load bus data lines into the B register
-    lambda cpu: setattr(cpu, "reg_b", cpu.bus.data)
+    lambda cpu: setattr(cpu, "reg_b", cpu.bus.data),
 ]
 
 # Read the bus at the D register into the C register
@@ -237,7 +306,7 @@ INSTRUCTIONS[0x36] = RDC = [
     # Bus read at the D register
     lambda cpu: cpu.bus.read((cpu.reg_h << 8) | cpu.reg_l),
     # Load bus data lines into the C register
-    lambda cpu: setattr(cpu, "reg_b", cpu.bus.data)
+    lambda cpu: setattr(cpu, "reg_b", cpu.bus.data),
 ]
 
 # Read the bus at the D register into the E register
@@ -245,9 +314,25 @@ INSTRUCTIONS[0x37] = RDE = [
     # Bus read at the D register
     lambda cpu: cpu.bus.read((cpu.reg_h << 8) | cpu.reg_l),
     # Load bus data lines into the A register, bus read at the D register plus one
-    lambda cpu: (setattr(cpu, "reg_a", cpu.bus.data), cpu.bus.read(((cpu.reg_h << 8) | cpu.reg_l) + 1)),
+    lambda cpu: (
+        setattr(cpu, "reg_a", cpu.bus.data),
+        cpu.bus.read(((cpu.reg_h << 8) | cpu.reg_l) + 1),
+    ),
     # Load bus data lines into the B register
-    lambda cpu: setattr(cpu, "reg_b", cpu.bus.data)
+    lambda cpu: setattr(cpu, "reg_b", cpu.bus.data),
+]
+
+# Read the bus at the E register into the D register
+INSTRUCTIONS[0x38] = RED = [
+    # Bus read at the E register
+    lambda cpu: cpu.bus.read((cpu.reg_b << 8) | cpu.reg_a),
+    # Load bus data lines into the L register, bus read at the E register plus one
+    lambda cpu: (
+        setattr(cpu, "reg_l", cpu.bus.data),
+        cpu.bus.read(((cpu.reg_b << 8) | cpu.reg_a) + 1),
+    ),
+    # Load bus data lines into the H register
+    lambda cpu: setattr(cpu, "reg_h", cpu.bus.data),
 ]
 
 
@@ -283,7 +368,11 @@ INSTRUCTIONS[0x44] = ADD = [
     # Set the C register to A + B, set the carry bit in the status register to (A + B > 0xFF)
     lambda cpu: (
         setattr(cpu, "reg_c", (cpu.reg_a + cpu.reg_b) & 0xFF),
-        setattr(cpu, "reg_s", (cpu.reg_s | STATUS_CARRY) if (cpu.reg_a + cpu.reg_b) > 0xFF else (cpu.reg_s & ~STATUS_CARRY))
+        setattr(
+            cpu,
+            "reg_s",
+            ((cpu.reg_s | STATUS_CARRY) if (cpu.reg_a + cpu.reg_b) > 0xFF else (cpu.reg_s & ~STATUS_CARRY)),
+        ),
     )
 ]
 
@@ -292,7 +381,15 @@ INSTRUCTIONS[0x45] = SUB = [
     # Set the C register to A - B, set the carry bit in the status register to (A - B > 0xFF)
     lambda cpu: (
         setattr(cpu, "reg_c", (cpu.reg_a + (~cpu.reg_b + 1) & 0xFF) & 0xFF),
-        setattr(cpu, "reg_s", (cpu.reg_s | STATUS_CARRY) if (cpu.reg_a + (~cpu.reg_b + 1) & 0xFF) > 0xFF else (cpu.reg_s & ~STATUS_CARRY))
+        setattr(
+            cpu,
+            "reg_s",
+            (
+                (cpu.reg_s | STATUS_CARRY)
+                if (cpu.reg_a + (~cpu.reg_b + 1) & 0xFF) > 0xFF
+                else (cpu.reg_s & ~STATUS_CARRY)
+            ),
+        ),
     )
 ]
 
@@ -302,7 +399,7 @@ INSTRUCTIONS[0x46] = MUL = [
     lambda cpu: (
         setattr(cpu, "reg_c", (cpu.reg_a * cpu.reg_b) & 0xFF),
         setattr(cpu, "reg_l", (cpu.reg_a * cpu.reg_b) & 0xFF),
-        setattr(cpu, "reg_h", ((cpu.reg_a * cpu.reg_b) >> 8) & 0xFF)
+        setattr(cpu, "reg_h", ((cpu.reg_a * cpu.reg_b) >> 8) & 0xFF),
     )
 ]
 
@@ -376,138 +473,174 @@ INSTRUCTIONS[0x54] = LTC = [
 INSTRUCTIONS[0x60] = PSH = [
     # Bus write C register at the T register, increment the T register
     lambda cpu: (
-        (print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...,
+        ((print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...),
         cpu.bus.write(STACK_START_ADDR + cpu.reg_t, cpu.reg_c),
-        setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF)
+        setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF),
     ),
     # Wait a clock for write to finish
-    None
+    None,
 ]
 
 # Pull the top of the stack into the C register
 INSTRUCTIONS[0x61] = PUL = [
     # Decrement the T register, bus read the at the T register
     lambda cpu: (
-        (print("STACK UNDERFLOW"), exit(ERR_STACK_UNDERFLOW)) if cpu.reg_t == 0 else ...,
+        ((print("STACK UNDERFLOW"), exit(ERR_STACK_UNDERFLOW)) if cpu.reg_t == 0 else ...),
         setattr(cpu, "reg_t", (cpu.reg_t - 1) & 0xFFFF),
-        cpu.bus.read(STACK_START_ADDR + cpu.reg_t)
+        cpu.bus.read(STACK_START_ADDR + cpu.reg_t),
     ),
     # Load data lines into the C register
-    lambda cpu: setattr(cpu, "reg_c", cpu.bus.data)
+    lambda cpu: setattr(cpu, "reg_c", cpu.bus.data),
 ]
 
 # Jump to subroutine
 INSTRUCTIONS[0x62] = SRT = [
     # Bus write low byte of the program counter at the T register, increment the T register
     lambda cpu: (
-        (print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...,
+        ((print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...),
         cpu.bus.write(STACK_START_ADDR + cpu.reg_t, cpu.reg_p & 0xFF),
-        setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF)
+        setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF),
     ),
     # Bus write high byte of the program counter at the T register, increment the T register
     lambda cpu: (
-        (print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...,
+        ((print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...),
         cpu.bus.write(STACK_START_ADDR + cpu.reg_t, (cpu.reg_p >> 8) & 0xFF),
-        setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF)
+        setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF),
     ),
     # Set the program counter to the D register
-    lambda cpu: setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF)
+    lambda cpu: setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF),
 ]
 
 INSTRUCTIONS[0x63] = SIA = [
     # Bus write low byte of the program counter at the T register if A, increment the T register if A
     lambda cpu: (
-        (print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...,
-        cpu.bus.write(STACK_START_ADDR + cpu.reg_t, cpu.reg_p & 0xFF),
-        setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF)
-    ) if cpu.reg_a else ...,
+        (
+            ((print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...),
+            cpu.bus.write(STACK_START_ADDR + cpu.reg_t, cpu.reg_p & 0xFF),
+            setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF),
+        )
+        if cpu.reg_a
+        else ...
+    ),
     # Bus write high byte of the program counter at the T register if A, increment the T register if A
     lambda cpu: (
-        (print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...,
-        cpu.bus.write(STACK_START_ADDR + cpu.reg_t, (cpu.reg_p >> 8) & 0xFF),
-        setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF)
-    )  if cpu.reg_a else ...,
+        (
+            ((print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...),
+            cpu.bus.write(STACK_START_ADDR + cpu.reg_t, (cpu.reg_p >> 8) & 0xFF),
+            setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF),
+        )
+        if cpu.reg_a
+        else ...
+    ),
     # Set the program counter to the D register if A
-    lambda cpu: (setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF)) if cpu.reg_a else ...
+    lambda cpu: ((setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF)) if cpu.reg_a else ...),
 ]
 
 INSTRUCTIONS[0x64] = SIB = [
     # Bus write low byte of the program counter at the T register if B, increment the T register if B
     lambda cpu: (
-        (print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...,
-        cpu.bus.write(STACK_START_ADDR + cpu.reg_t, cpu.reg_p & 0xFF),
-        setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF)
-    ) if cpu.reg_b else ...,
+        (
+            ((print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...),
+            cpu.bus.write(STACK_START_ADDR + cpu.reg_t, cpu.reg_p & 0xFF),
+            setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF),
+        )
+        if cpu.reg_b
+        else ...
+    ),
     # Bus write high byte of the program counter at the T register if B, increment the T register if B
     lambda cpu: (
-        (print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...,
-        cpu.bus.write(STACK_START_ADDR + cpu.reg_t, (cpu.reg_p >> 8) & 0xFF),
-        setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF)
-    )  if cpu.reg_b else ...,
+        (
+            ((print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...),
+            cpu.bus.write(STACK_START_ADDR + cpu.reg_t, (cpu.reg_p >> 8) & 0xFF),
+            setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF),
+        )
+        if cpu.reg_b
+        else ...
+    ),
     # Set the program counter to the D register if B
-    lambda cpu: (setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF)) if cpu.reg_b else ...
+    lambda cpu: ((setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF)) if cpu.reg_b else ...),
 ]
 
 INSTRUCTIONS[0x65] = SIC = [
     # Bus write low byte of the program counter at the T register if C, increment the T register if C
     lambda cpu: (
-        (print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...,
-        cpu.bus.write(STACK_START_ADDR + cpu.reg_t, cpu.reg_p & 0xFF),
-        setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF)
-    ) if cpu.reg_c else ...,
+        (
+            ((print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...),
+            cpu.bus.write(STACK_START_ADDR + cpu.reg_t, cpu.reg_p & 0xFF),
+            setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF),
+        )
+        if cpu.reg_c
+        else ...
+    ),
     # Bus write high byte of the program counter at the T register if C, increment the T register if C
     lambda cpu: (
-        (print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...,
-        cpu.bus.write(STACK_START_ADDR + cpu.reg_t, (cpu.reg_p >> 8) & 0xFF),
-        setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF)
-    )  if cpu.reg_c else ...,
+        (
+            ((print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...),
+            cpu.bus.write(STACK_START_ADDR + cpu.reg_t, (cpu.reg_p >> 8) & 0xFF),
+            setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF),
+        )
+        if cpu.reg_c
+        else ...
+    ),
     # Set the program counter to the D register if C
-    lambda cpu: (setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF)) if cpu.reg_c else ...
+    lambda cpu: ((setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF)) if cpu.reg_c else ...),
 ]
 
 # Jump to subroutine with immediate addressing
 INSTRUCTIONS[0x66] = SRI = [
     # Increment program counter, bus read at program counter
-    lambda cpu: (setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (
+        setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF),
+        cpu.bus.read(cpu.reg_p),
+    ),
     # Load data lines into the L register, increment the program counter, bus read at program counter
-    lambda cpu: (setattr(cpu, "reg_l", cpu.bus.data), setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (
+        setattr(cpu, "reg_l", cpu.bus.data),
+        setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF),
+        cpu.bus.read(cpu.reg_p),
+    ),
     # Load data lines into the H register, bus write low byte of the program counter at the T register, increment the T register
     lambda cpu: (
         setattr(cpu, "reg_h", cpu.bus.data),
-        (print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...,
+        ((print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...),
         cpu.bus.write(STACK_START_ADDR + cpu.reg_t, cpu.reg_p & 0xFF),
-        setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF)
+        setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF),
     ),
     # Bbus write high byte of the program counter at the T register, increment the T register
     lambda cpu: (
-        (print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...,
+        ((print("STACK OVERFLOW"), exit(ERR_STACK_OVERFLOW)) if cpu.reg_t > STACK_POINTER_MAX else ...),
         cpu.bus.write(STACK_START_ADDR + cpu.reg_t, (cpu.reg_p >> 8) & 0xFF),
-        setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF)
+        setattr(cpu, "reg_t", (cpu.reg_t + 1) & 0xFFFF),
     ),
     # Set the program counter to the D register
-    lambda cpu: (setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF))
+    lambda cpu: (setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF)),
 ]
 
 # Return from subroutine
 INSTRUCTIONS[0x67] = RET = [
     # Decrement T register, bus read at T register
     lambda cpu: (
-        (print("STACK UNDERFLOW"), exit(ERR_STACK_UNDERFLOW)) if cpu.reg_t == 0 else ...,
+        ((print("STACK UNDERFLOW"), exit(ERR_STACK_UNDERFLOW)) if cpu.reg_t == 0 else ...),
         setattr(cpu, "reg_t", (cpu.reg_t - 1) & 0xFFFF),
-        cpu.bus.read(STACK_START_ADDR + cpu.reg_t)
+        cpu.bus.read(STACK_START_ADDR + cpu.reg_t),
     ),
     # Load data lines into the H register, decrement T register, bus read at T register
     lambda cpu: (
         setattr(cpu, "reg_h", cpu.bus.data),
-        (print("STACK UNDERFLOW"), exit(ERR_STACK_UNDERFLOW)) if cpu.reg_t == 0 else ...,
+        ((print("STACK UNDERFLOW"), exit(ERR_STACK_UNDERFLOW)) if cpu.reg_t == 0 else ...),
         setattr(cpu, "reg_t", (cpu.reg_t - 1) & 0xFFFF),
-        cpu.bus.read(STACK_START_ADDR + cpu.reg_t)
+        cpu.bus.read(STACK_START_ADDR + cpu.reg_t),
     ),
     # Load datalines into the L register, set the program counter to the D register
     lambda cpu: (
         setattr(cpu, "reg_l", cpu.bus.data),
-        setattr(cpu, "reg_p", (cpu.reg_l | (cpu.reg_h << 8)) & 0xFFFF)
-    )
+        setattr(cpu, "reg_p", (cpu.reg_l | (cpu.reg_h << 8)) & 0xFFFF),
+    ),
+]
+
+# Return from interrupt
+INSTRUCTIONS[0x68] = RTI = [
+    lambda cpu: cpu.exit_interrupt()
 ]
 
 
@@ -564,11 +697,21 @@ INSTRUCTIONS[0x77] = JSC = [
 # Jump to the address in the next two bytes
 INSTRUCTIONS[0x78] = JMI = [
     # Increment program counter, read bus at program counter
-    lambda cpu: (setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (
+        setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF),
+        cpu.bus.read(cpu.reg_p),
+    ),
     # Load data lines into the L register, increment program counter, read bus at program counter
-    lambda cpu: (setattr(cpu, "reg_l", cpu.bus.data), setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF), cpu.bus.read(cpu.reg_p)),
+    lambda cpu: (
+        setattr(cpu, "reg_l", cpu.bus.data),
+        setattr(cpu, "reg_p", (cpu.reg_p + 1) & 0xFFFF),
+        cpu.bus.read(cpu.reg_p),
+    ),
     # Load data lines into the H register, load the D register into the program counter
-    lambda cpu: (setattr(cpu, "reg_h", cpu.bus.data), setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF))
+    lambda cpu: (
+        setattr(cpu, "reg_h", cpu.bus.data),
+        setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF),
+    ),
 ]
 
 INSTRUCTIONS[0x79] = JAI = [
@@ -577,7 +720,10 @@ INSTRUCTIONS[0x79] = JAI = [
     # Load data lines into the L register, increment program counter, read bus at program counter
     JMI[1],
     # Load data lines into the H register, load the D register into the program counter if A
-    lambda cpu: (setattr(cpu, "reg_h", cpu.bus.data), setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF) if cpu.reg_a else ...)
+    lambda cpu: (
+        setattr(cpu, "reg_h", cpu.bus.data),
+        (setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF) if cpu.reg_a else ...),
+    ),
 ]
 
 INSTRUCTIONS[0x7A] = JBI = [
@@ -586,7 +732,10 @@ INSTRUCTIONS[0x7A] = JBI = [
     # Load data lines into the L register, increment program counter, read bus at program counter
     JMI[1],
     # Load data lines into the H register, load the D register into the program counter if B
-    lambda cpu: (setattr(cpu, "reg_h", cpu.bus.data), setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF) if cpu.reg_b else ...)
+    lambda cpu: (
+        setattr(cpu, "reg_h", cpu.bus.data),
+        (setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF) if cpu.reg_b else ...),
+    ),
 ]
 
 INSTRUCTIONS[0x7B] = JCI = [
@@ -595,7 +744,10 @@ INSTRUCTIONS[0x7B] = JCI = [
     # Load data lines into the L register, increment program counter, read bus at program counter
     JMI[1],
     # Load data lines into the H register, load the D register into the program counter if C
-    lambda cpu: (setattr(cpu, "reg_h", cpu.bus.data), setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF) if cpu.reg_c else ...)
+    lambda cpu: (
+        setattr(cpu, "reg_h", cpu.bus.data),
+        (setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF) if cpu.reg_c else ...),
+    ),
 ]
 
 INSTRUCTIONS[0x7C] = JXI = [
@@ -604,7 +756,10 @@ INSTRUCTIONS[0x7C] = JXI = [
     # Load data lines into the L register, increment program counter, read bus at program counter
     JMI[1],
     # Load data lines into the H register, load the D register into the program counter if not A
-    lambda cpu: (setattr(cpu, "reg_h", cpu.bus.data), setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF) if not cpu.reg_a else ...)
+    lambda cpu: (
+        setattr(cpu, "reg_h", cpu.bus.data),
+        (setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF) if not cpu.reg_a else ...),
+    ),
 ]
 
 INSTRUCTIONS[0x7D] = JYI = [
@@ -613,7 +768,10 @@ INSTRUCTIONS[0x7D] = JYI = [
     # Load data lines into the L register, increment program counter, read bus at program counter
     JMI[1],
     # Load data lines into the H register, load the D register into the program counter if not B
-    lambda cpu: (setattr(cpu, "reg_h", cpu.bus.data), setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF) if not cpu.reg_b else ...)
+    lambda cpu: (
+        setattr(cpu, "reg_h", cpu.bus.data),
+        (setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF) if not cpu.reg_b else ...),
+    ),
 ]
 
 INSTRUCTIONS[0x7E] = JZI = [
@@ -622,7 +780,10 @@ INSTRUCTIONS[0x7E] = JZI = [
     # Load data lines into the L register, increment program counter, read bus at program counter
     JMI[1],
     # Load data lines into the H register, load the D register into the program counter if C
-    lambda cpu: (setattr(cpu, "reg_h", cpu.bus.data), setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF) if not cpu.reg_c else ...)
+    lambda cpu: (
+        setattr(cpu, "reg_h", cpu.bus.data),
+        (setattr(cpu, "reg_p", ((cpu.reg_l | (cpu.reg_h << 8)) - 1) & 0xFFFF) if not cpu.reg_c else ...),
+    ),
 ]
 
 
@@ -643,6 +804,17 @@ INSTRUCTIONS[0xE0] = HLT = [
     lambda cpu: (print("HALT"), setattr(cpu, "reg_s", cpu.reg_s | STATUS_HALT))
 ]
 
+# Disable interrupts
+INSTRUCTIONS[0xE1] = CLI = [
+    # Disable interrupts
+    lambda cpu: setattr(cpu, "reg_s", cpu.reg_s | STATUS_CLI)
+]
+
+# Enable interrupts
+INSTRUCTIONS[0xE2] = STI = [
+    # Enable interrupts
+    lambda cpu: setattr(cpu, "reg_s", cpu.reg_s & ~STATUS_CLI)
+]
 
 ### DEBUG INSTRUCTIONS ###
 

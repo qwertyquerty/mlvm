@@ -1,16 +1,19 @@
-include gamepad;
-include graphics;
-include system;
-include time;
+include mlib/gamepad.mlvc;
+include mlib/graphics.mlvc;
+include mlib/system.mlvc;
+include mlib/time.mlvc;
 
-define PADDLE_WIDTH 10; define PADDLE_HEIGHT 2; define PADDLE_Y 60;
-define BALL_SIZE 3;
-define SCREEN_SIZE 64;
+define PADDLE_WIDTH 40; define PADDLE_HEIGHT 4; define PADDLE_Y 250;
+define BALL_SIZE 5;
+define SCREEN_SIZE 256;
 define FRAME_LENGTH_DMS 167;
 
 var ball_x ball_y paddle_x ball_vx ball_vy score;
 
 begin
+asm { #CLI }
+call register_flip_isr;
+asm { #STI }
 
 set score = 0;
 set ball_x = 60;
@@ -76,11 +79,5 @@ while 1 {
     set rect_x = 1; set rect_y = 1; set rect_w = score; set rect_h = 1; set rect_c = 0b11111001;
     call draw_rect;
 
-    /* Frame update */
-    call screen_flip;
-
-    /* Sleep to maintain constant FPS */
-    call get_dms_time;
-    set sleep_dms_n = FRAME_LENGTH_DMS - get_dms_time_ret;
-    call sleep_dms;
+    call flip_sync;
 }

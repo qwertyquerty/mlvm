@@ -3,7 +3,15 @@ MLVM Virtual Machine
 """
 
 from mlvm.bus import MLVMBus
-from mlvm.devices import MLVMProcessor, MLVMMemoryRO, MLVMMemoryRW, MLVMVideoInterface, MLVMGamepad, MLVMTimer, MLVMDebugger
+from mlvm.devices import (
+    MLVMProcessor,
+    MLVMMemoryRO,
+    MLVMMemoryRW,
+    MLVMVideoInterface,
+    MLVMGamepad,
+    MLVMTimer,
+    MLVMDebugger,
+)
 from mlvm.const import *
 
 import sys
@@ -43,7 +51,7 @@ perf_cycle_offset = 0
 perf_time_offset = 0
 
 while True:
-    bus.tick() # Tick the bus
+    bus.tick()  # Tick the bus
 
     if bus.cycle % CPU_GOAL_CLOCK == 0:
         # Output the current bus clock speed
@@ -54,7 +62,7 @@ while True:
     if bus.cycle % CPU_SLEEP_INTERVAL == 0:
         # Sleep to make up for the cpu running faster than it should
         cur_tick_time = time.perf_counter()
-        while ((CPU_SLEEP_INTERVAL/CPU_GOAL_CLOCK) - (time.perf_counter()-last_tick_time)) > 0:
+        while ((CPU_SLEEP_INTERVAL / CPU_GOAL_CLOCK) - (time.perf_counter() - last_tick_time)) > 0:
             pass
-        
+
         last_tick_time = time.perf_counter()

@@ -1,0 +1,53 @@
+define GRAPHICS_REG_X 0x6000;
+define GRAPHICS_REG_Y 0x6001;
+define GRAPHICS_REG_W 0x6002;
+define GRAPHICS_REG_H 0x6003;
+
+define GRAPHICS_REG_PIXL 0x6004;
+define GRAPHICS_REG_FILL 0x6005;
+define GRAPHICS_REG_RECT 0x6006;
+
+define GRAPHICS_REG_FLIP 0x600A;
+
+fn screen_clear {
+    set GRAPHICS_REG_FILL = 1;
+}
+
+var pix_x pix_y pix_c;
+fn set_pixel {
+    set GRAPHICS_REG_X = pix_x;
+    set GRAPHICS_REG_Y = pix_y;
+    set GRAPHICS_REG_PIXL = pix_c;
+}
+
+var rect_x rect_y rect_w rect_h rect_c;
+fn draw_rect {
+    set GRAPHICS_REG_X = rect_x;
+    set GRAPHICS_REG_Y = rect_y;
+    set GRAPHICS_REG_W = rect_w;
+    set GRAPHICS_REG_H = rect_h;
+    set GRAPHICS_REG_RECT = rect_c;
+}
+
+var gfx_flip_status;
+fn flip_sync {
+    set gfx_flip_status = 0;
+    while (gfx_flip_status == 0) {
+
+    }
+}
+
+fn flip_isr {
+    set gfx_flip_status = 1;
+    rti;
+}
+
+define GRAPHICS_FLIP_ISR_VEC 0x440;
+
+fn register_flip_isr {
+    asm {
+        #LND GRAPHICS_FLIP_ISR_VEC
+        #LNE @flip_isr
+        #WRE
+    }
+}

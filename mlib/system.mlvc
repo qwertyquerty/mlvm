@@ -1,0 +1,17 @@
+fn exit {
+    asm { #HLT }
+}
+
+asm {
+    .seekpush 0xFFE0
+
+    _nmi_handler:
+        #LNB 0x04
+        #RED
+        #SED
+        #IOR
+        #JIC
+        #RTI
+        
+    .seekpop
+}

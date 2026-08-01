@@ -1,7 +1,8 @@
-from mlvm.const import *
+from mlvm.const import READ, WRITE
 from mlvm.devices import Device
 
-class MLVMBus():
+
+class MLVMBus:
     def __init__(self):
         # List of devices connected to this bus
         self.devices: list[Device] = []
@@ -17,6 +18,18 @@ class MLVMBus():
 
         # Cycle counter
         self.cycle = 0
+
+        # Whether an unserviced interrupt request is present
+        self.irq_status = 0
+
+        # Whether an unserviced non-maskable interrupt request is present
+        self.nmi_status = 0
+
+        # ID of the interrupt request
+        self.irq_id = 0
+
+        # ID of the non-maskable interrupt request
+        self.nmi_id = 0
 
     def reset(self):
         """
@@ -41,10 +54,10 @@ class MLVMBus():
         """
 
         self.latch()
-        
+
         for device in self.devices:
             device.clock_pos()
-    
+
     def clock_neg(self) -> None:
         """
         Negative edge of the clock, latches lines and clocks all devices
@@ -59,7 +72,7 @@ class MLVMBus():
         """
         Read from the bus by putting an address, will be latched on the next edge of the clock
         """
-        
+
         self.next_address = addr & 0xFFFF
         self.next_intent = READ
 
@@ -74,18 +87,51 @@ class MLVMBus():
         """
         Write to the clock by putting an address and data then setting the intent to write, latched on the edge of the clock
         """
-        
+
         self.next_address = addr & 0xFFFF
         self.next_data = data & 0xFF
         self.next_intent = WRITE
+
+    def irq(self, irq_id):
+        """
+        Trigger an interrupt request
+        """
+
+        self.irq_id = irq_id
+        self.irq_status = 1
+
+    def nmi(self, nmi_id):
+        """
+        Trigger a non-maskable interrupt
+        """
+
+        self.nmi_id = nmi_id
+        self.nmi_status = 1
+
+    def service_irq(self):
+        """
+        Service an interrupt request
+        """
+
+        t = self.irq_status
+        self.irq_status = 0
+        return t;
+
+    def service_nmi(self):
+        """
+        Service a non-maskable interrupt
+        """
+
+        t = self.nmi_status
+        self.nmi_status = 0
+        return t
 
     def latch(self):
         """
         Called on each clock edge to finalize the address, data, and intent lines for each clock so that
         they will not change again until the next edge of the clock
         """
-        
+
         self.address = self.next_address
         self.data = self.next_data
         self.intent = self.next_intent
-
