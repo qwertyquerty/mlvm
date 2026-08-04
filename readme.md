@@ -49,8 +49,6 @@ By default, address space is laid out as shown below
 
 `pypy -m pip install -r requirements.txt`
 
-Set up the `black`/`flake8` pre-commit hook once per clone: `pre-commit install`
-
 ## Compiling/Running Code
 
 You can compile, assemble, and run any `.mlvc` file, for example Lavender OS at `lvos/lvos.mlvc`.
