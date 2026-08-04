@@ -1,0 +1,7 @@
+/* Color bytes, packed HVS 
+   7:4 - Hue
+   3:2 - Value
+   1:0 - Saturation */
+define ML_CLR_WHITE     0x30;
+define ML_CLR_BLACK     0x00;
+define ML_CLR_LAVENDER  0x7C;

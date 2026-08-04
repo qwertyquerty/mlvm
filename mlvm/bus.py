@@ -7,6 +7,10 @@ class MLVMBus:
         # List of devices connected to this bus
         self.devices: list[Device] = []
 
+        # Subsets of devices that actually override clock_pos/clock_neg
+        self.clock_pos_devices: list[Device] = []
+        self.clock_neg_devices: list[Device] = []
+
         # Current address on the address lines
         self.address = self.next_address = 0x0000
 
@@ -50,22 +54,22 @@ class MLVMBus:
 
     def clock_pos(self) -> None:
         """
-        Positive edge of the clock, latches lines and clocks all devices
+        Positive edge of the clock, latches lines and clocks devices that care about this edge
         """
 
         self.latch()
 
-        for device in self.devices:
+        for device in self.clock_pos_devices:
             device.clock_pos()
 
     def clock_neg(self) -> None:
         """
-        Negative edge of the clock, latches lines and clocks all devices
+        Negative edge of the clock, latches lines and clocks devices that care about this edge
         """
 
         self.latch()
 
-        for device in self.devices:
+        for device in self.clock_neg_devices:
             device.clock_neg()
 
     def read(self, addr) -> None:
@@ -85,7 +89,8 @@ class MLVMBus:
 
     def write(self, addr, data) -> None:
         """
-        Write to the clock by putting an address and data then setting the intent to write, latched on the edge of the clock
+        Write to the bus by putting an address and data then setting the intent to write,
+        latched on the edge of the clock
         """
 
         self.next_address = addr & 0xFFFF
@@ -107,24 +112,6 @@ class MLVMBus:
 
         self.nmi_id = nmi_id
         self.nmi_status = 1
-
-    def service_irq(self):
-        """
-        Service an interrupt request
-        """
-
-        t = self.irq_status
-        self.irq_status = 0
-        return t;
-
-    def service_nmi(self):
-        """
-        Service a non-maskable interrupt
-        """
-
-        t = self.nmi_status
-        self.nmi_status = 0
-        return t
 
     def latch(self):
         """

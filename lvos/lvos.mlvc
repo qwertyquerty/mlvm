@@ -1,0 +1,207 @@
+/* A very simple operating system that shows off basic kernel features
+   like processes, sleeping, yielding, and various mlib and peripheral features */
+
+include mlib/system.mlvc;
+include mlib/graphics.mlvc;
+include mlib/terminal.mlvc;
+include mlib/keyboard.mlvc;
+include mlib/string.mlvc;
+include mlib/time.mlvc;
+include mlib/color.mlvc;
+
+include lvos/lvk.mlvc;
+
+/* Animates a spinner character, one frame every delay ms. */
+fn spinner(u16 delay, u8 slot) {
+    var u8 frame;
+    var u8 c;
+
+    set frame = 0;
+    while 1 {
+        if frame == 0 { set c = '|'; }
+        if frame == 1 { set c = '/'; }
+        if frame == 2 { set c = '-'; }
+        if frame == 3 { set c = '\\'; }
+        call ml_term_put_char_at(slot, 1, c);
+        set frame = (frame + 1) % 4;
+        call lvk_sleep(delay);
+    }
+}
+
+define LVOS_PS_COL 13;
+define LVOS_PS_HEADER_ROW 22;
+define LVOS_PS_ROW_START 23;
+data u8 ps_header "I   TCKS SLP  ENTR";
+
+/* Draws a live process table */
+fn ps_monitor {
+    var u8 i;
+    var u8 row;
+    var u8 status;
+    var u8 status_char;
+
+    call ml_term_print_at(#LVOS_PS_COL, #LVOS_PS_HEADER_ROW, @ps_header);
+
+    while 1 {
+        set i = 0;
+        set row = #LVOS_PS_ROW_START;
+        while i < #LVK_MAX_PROCESSES {
+            set status = lvk_process_table<i>.status;
+
+            set status_char = '?';
+            if status == #LVK_PROC_STAT_NONE {
+                set status_char = '.';
+            }
+            if status == #LVK_PROC_STAT_RUNNING {
+                set status_char = 'R';
+            }
+            if status == #LVK_PROC_STAT_SLEEPING {
+                set status_char = 'S';
+            }
+
+            call ml_term_put_char_at(#LVOS_PS_COL, row, i + 48);
+            call ml_term_put_char_at(#LVOS_PS_COL + 2, row, status_char);
+            call ml_term_print_hex_u16(#LVOS_PS_COL + 4, row, lvk_process_table<i>.run_count);
+            call ml_term_print_hex_u16(#LVOS_PS_COL + 9, row, lvk_process_table<i>.sleep_ticks);
+            call ml_term_print_hex_u16(#LVOS_PS_COL + 14, row, lvk_process_table<i>.entrypoint);
+
+            incr i;
+            incr row;
+        }
+        call lvk_sleep(100);
+    }
+}
+
+define LVOS_ROW_PROMPT 3;
+define SHELL_LINE_MAX 29;
+alloc u8 30 shell_line_buf;
+var u8 shell_line_len;
+data u8 shell_prompt_prefix "> ";
+data u8 cmd_kill_prefix "kill ";
+
+/* Runs the typed command in shell_line_buf, then clears the line. */
+fn shell_dispatch {
+    var [u8] p;
+    var u8 slot;
+    var u8 matched;
+
+    set p = @shell_line_buf + shell_line_len;
+    set [p] = 0; /* null terminate for string comparisons */
+
+    /* check for command names */
+    if ?ml_str_starts_with(@shell_line_buf, @cmd_kill_prefix) {
+        set p = @shell_line_buf + 5;
+        set slot = #ML_STR_CHAR_TO_DIGIT([p]);
+        if slot < #LVK_MAX_PROCESSES {
+            call lvk_kill(slot);
+        }
+    }
+
+    set shell_line_len = 0;
+}
+
+/* Redraws the prompt row from shell_line_buf. */
+fn shell_redraw_prompt {
+    var u8 i;
+    var [u8] p;
+    var u8 c;
+
+    call ml_term_clear_row(#LVOS_ROW_PROMPT);
+    call ml_term_print_at(0, #LVOS_ROW_PROMPT, @shell_prompt_prefix);
+
+    set i = 0;
+    while i < shell_line_len {
+        set p = @shell_line_buf + i;
+        set c = [p];
+        call ml_term_put_char_at(2 + i, #LVOS_ROW_PROMPT, c);
+        incr i;
+    }
+}
+
+/* Typed shell process: reads keys, echoes, handles enter/backspace, dispatches commands. */
+fn shell_main {
+    var u8 c;
+    var [u8] p;
+
+    call shell_redraw_prompt;
+
+    while 1 {
+        set c = ?ml_kb_read();
+
+        if c == 0 {
+            call lvk_sleep(20);
+        }
+
+        if c == 13 { /* Enter */
+            call shell_dispatch;
+            call shell_redraw_prompt;
+        }
+
+        if c == 8 { /* Backspace */
+            if shell_line_len > 0 {
+                decr shell_line_len;
+                call shell_redraw_prompt;
+            }
+        }
+
+        if c >= 32 { /* Printable characters */
+            if c < 127 {
+                if shell_line_len < #SHELL_LINE_MAX {
+                    set p = @shell_line_buf + shell_line_len;
+                    set [p] = c;
+                    incr shell_line_len;
+                    call shell_redraw_prompt;
+                }
+            }
+        }
+    }
+}
+
+fn demo_a { call spinner(20, 1); }
+fn demo_b { call spinner(40, 2); }
+fn demo_c { call spinner(80, 3); }
+fn demo_d { call spinner(160, 4); }
+fn demo_e { call spinner(320, 5); }
+
+
+begin
+asm { CLI }
+#ML_KB_REGISTER_ISR();
+#ML_GX_SET_FPS(60);
+#ML_GX_FILL(#ML_CLR_LAVENDER)
+
+call ml_font_load_texram(#ML_CLR_LAVENDER, #ML_CLR_BLACK);
+
+#ML_TERM_PAINT_CELL(1,  1, 'L');
+#ML_TERM_PAINT_CELL(2,  1, 'a');
+#ML_TERM_PAINT_CELL(3,  1, 'v');
+#ML_TERM_PAINT_CELL(4,  1, 'e');
+#ML_TERM_PAINT_CELL(5,  1, 'n');
+#ML_TERM_PAINT_CELL(6,  1, 'd');
+#ML_TERM_PAINT_CELL(7,  1, 'e');
+#ML_TERM_PAINT_CELL(8,  1, 'r');
+#ML_TERM_PAINT_CELL(9,  1, ' ');
+#ML_TERM_PAINT_CELL(10, 1, 'O');
+#ML_TERM_PAINT_CELL(11, 1, 'S');
+
+call ml_time_delay_ms(1000);
+
+call ml_term_clear();
+#ML_GX_REGISTER_FLIP_ISR();
+call lvk_init();
+
+asm { STI }
+
+
+call lvk_spawn(@demo_a);
+call lvk_spawn(@demo_b);
+call lvk_spawn(@demo_c);
+call lvk_spawn(@demo_d);
+call lvk_spawn(@demo_e);
+call lvk_spawn(@ps_monitor);
+call lvk_spawn(@shell_main);
+
+while 1 {
+    call ml_term_draw;
+    call ml_gx_flip_sync();
+}

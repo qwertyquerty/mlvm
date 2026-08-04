@@ -1,0 +1,55 @@
+/* Returns 1 if the two null-terminated strings are equal, else 0. */
+fn ml_str_eq([u8] a, [u8] b) {
+    var u8 ca;
+    var u8 cb;
+
+    set ca = [a];
+    set cb = [b];
+    while ca > 0 {
+        if ca != cb {
+            return 0;
+        }
+        incr a;
+        incr b;
+        set ca = [a];
+        set cb = [b];
+    }
+    if cb > 0 {
+        return 0;
+    }
+    return 1;
+}
+
+/* Returns 1 if string a starts with prefix, else 0. */
+fn ml_str_starts_with([u8] a, [u8] prefix) {
+    var u8 ca;
+    var u8 cp;
+
+    set cp = [prefix];
+    while cp > 0 {
+        set ca = [a];
+        if ca != cp {
+            return 0;
+        }
+        incr a;
+        incr prefix;
+        set cp = [prefix];
+    }
+    return 1;
+}
+
+/* Decimal digit (0-9) to ASCII char. */
+macro ML_STR_DIGIT_CHAR(N) {
+    ((#N) + 48)
+}
+
+/* ASCII digit char to decimal digit (0-9). */
+macro ML_STR_CHAR_TO_DIGIT(C) {
+    ((#C) - 48)
+}
+
+/* Hex nibble (0-15) to ASCII char ('0'-'9' or 'A'-'F'). Branchless: adds 7 when N >= 10 to jump
+   over the ':' - '@' gap between '9' and 'A'. */
+macro ML_STR_HEX_NIBBLE_CHAR(N) {
+    ((#N) + 48 + (((#N) >= 10) * 7))
+}

@@ -1,4 +1,4 @@
-from mlvm.const import *
+from mlvm.const import PERIPHS_START, PERIPH_SIZE
 
 
 class Device:
@@ -8,7 +8,14 @@ class Device:
 
     def __init__(self, bus):
         self.bus = bus
-        self.bus.devices.append(self)
+        bus.devices.append(self)
+
+        # Most devices only ever override one of clock_pos/clock_neg, so register which ones do so we
+        # dont have to call empty Device.clock_pos/neg
+        if type(self).clock_pos is not Device.clock_pos:
+            bus.clock_pos_devices.append(self)
+        if type(self).clock_neg is not Device.clock_neg:
+            bus.clock_neg_devices.append(self)
 
     def reset(self):
         """

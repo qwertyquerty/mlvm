@@ -1,5 +1,5 @@
 from mlvm.devices import AddressedDevice
-from mlvm.const import *
+from mlvm.const import READ, WRITE
 
 
 class MLVMMemoryRW(AddressedDevice):
@@ -14,15 +14,12 @@ class MLVMMemoryRW(AddressedDevice):
         self.memory = [0x00 for i in self.addr_range]  # Initialize memory to all 0x00
 
     def clock_neg(self):
-        if (
-            self.bus.address in self.addr_range
-        ):  # If the current bus address is in our address range, we are being addressed
+        addr = self.bus.address
+        if addr in self.addr_range:  # If the current bus address is in our address range, we are being addressed
             if self.bus.intent == READ:
-                self.bus.respond(self.memory[self.unoffset_addr(self.bus.address)])  # Respond on the bus if a read
+                self.bus.respond(self.memory[addr - self.addr_range.start])  # Respond on the bus if a read
             elif self.bus.intent == WRITE:
-                self.memory[self.unoffset_addr(self.bus.address)] = (
-                    self.bus.data
-                )  # Write data lines to memory if a write
+                self.memory[addr - self.addr_range.start] = self.bus.data  # Write data lines to memory if a write
 
     def load_file(self, file, offset=0):
         """
@@ -41,5 +38,6 @@ class MLVMMemoryRO(MLVMMemoryRW):
 
     def clock_neg(self):
         # ROM only responds to reads, ignores writes
-        if self.bus.address in self.addr_range and self.bus.intent == READ:
-            self.bus.respond(self.memory[self.unoffset_addr(self.bus.address)])
+        addr = self.bus.address
+        if addr in self.addr_range and self.bus.intent == READ:
+            self.bus.respond(self.memory[addr - self.addr_range.start])

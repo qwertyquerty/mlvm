@@ -1,0 +1,199 @@
+include mlib/time.mlvc;
+
+define LVK_MAX_PROCESSES 8;
+define LVK_STACK_SLICE_SIZE 256;
+
+/* one CPU frame is 13 bytes: P,A,B,C,D (u16 each) + S (u8) + T (u16) */
+define LVK_FRAME_SIZE 13;
+alloc u8 104 lvk_frames; /* LVK_MAX_PROCESSES * LVK_FRAME_SIZE */
+
+/* how often the timer preempts, also the unit lvk_sleep counts down in, since sleeping processes
+   are only ever woken up by this same tick */
+define LVK_TICK_MS 2;
+
+/* A purely software-defined IRQ id for voluntarily yielding back into the scheduler */
+define LVK_YIELD_IRQ_ID 0xF0;
+
+struct proc_t {
+    u8 status;          /* one of LVK_PROC_STAT_* */
+    u16 entrypoint;     /* informational only, the program counter entrypoint of the thread */
+    u16 sleep_ticks;    /* how many ticks this process has yet to sleep */
+    u16 run_count;      /* how many ticks this process has been ran */
+};
+
+alloc proc_t #LVK_MAX_PROCESSES lvk_process_table;
+
+define LVK_PROC_STAT_NONE       0x0;
+define LVK_PROC_STAT_RUNNING    0x1;
+define LVK_PROC_STAT_SLEEPING   0x2;
+
+var u8 lvk_cur_process;
+
+/* Returns the index of the first NONE slot in lvk_process_table, or -1 if full. */
+fn _lvk_find_empty_proc {
+    var u8 i;
+
+    set i = 0;
+
+    while i < #LVK_MAX_PROCESSES {
+        if lvk_process_table<i>.status == #LVK_PROC_STAT_NONE {
+            return i;
+        }
+
+        incr i;
+    }
+
+    return -1;
+}
+
+/* Starts a new process at entry_addr. Returns its slot index, or 255 if the table is full. */
+fn lvk_spawn(u16 entry_addr) {
+    var u8 slot;
+    var u16 frame_base;
+
+    set slot = ?_lvk_find_empty_proc();
+    if slot == 255 {
+        return 255;
+    }
+
+    set frame_base = slot * #LVK_FRAME_SIZE;
+
+    /* Stored as entry_addr - 1, since the CPU always advances P by 1 after resuming */
+    set [u16 @lvk_frames + frame_base] = entry_addr - 1;
+    set [u16 @lvk_frames + frame_base + 2] = 0; /* A */
+    set [u16 @lvk_frames + frame_base + 4] = 0; /* B */
+    set [u16 @lvk_frames + frame_base + 6] = 0; /* C */
+    set [u16 @lvk_frames + frame_base + 8] = 0; /* D */
+    set [u8 @lvk_frames + frame_base + 10] = 0; /* S */
+    set [u16 @lvk_frames + frame_base + 11] = slot * #LVK_STACK_SLICE_SIZE; /* T: this slot's stack slice */
+
+    set lvk_process_table<slot>.status = #LVK_PROC_STAT_RUNNING;
+    set lvk_process_table<slot>.sleep_ticks = 0;
+    set lvk_process_table<slot>.entrypoint = entry_addr;
+    set lvk_process_table<slot>.run_count = 0;
+
+    return slot;
+}
+
+/* Ends the current process. Marks its slot free and spins until the scheduler switches away. */
+fn lvk_exit {
+    set lvk_process_table<lvk_cur_process>.status = #LVK_PROC_STAT_NONE;
+    while 1 {
+    }
+}
+
+
+/* Sleeps the current process for ms milliseconds, yielding to the scheduler immediately. */
+fn lvk_sleep(u16 ms) {
+    var u8 me;
+
+    set me = lvk_cur_process;
+
+    if lvk_process_table<me>.status == #LVK_PROC_STAT_NONE {
+        call lvk_exit;
+    }
+
+    set lvk_process_table<me>.sleep_ticks = (ms / #LVK_TICK_MS) + 1;
+    set lvk_process_table<me>.status = #LVK_PROC_STAT_SLEEPING;
+
+    #ML_INT_TRIGGER(#LVK_YIELD_IRQ_ID);
+
+    while lvk_process_table<me>.status == #LVK_PROC_STAT_SLEEPING {
+    }
+
+    if lvk_process_table<me>.status == #LVK_PROC_STAT_NONE {
+        call lvk_exit;
+    }
+}
+
+
+/* Gives up the rest of the current process's tick immediately. */
+fn lvk_yield {
+    if lvk_process_table<lvk_cur_process>.status == #LVK_PROC_STAT_NONE {
+        call lvk_exit;
+    }
+
+    #ML_INT_TRIGGER(#LVK_YIELD_IRQ_ID);
+}
+
+
+/* Switches to the next RUNNING process, round robin. Saves the outgoing frame, picks the next
+   slot, loads its frame. Must run inside an interrupt, since svi/ldi touch the pending interrupt
+   frame that rti restores. */
+fn lvk_do_switch {
+    var u8 next;
+    var u16 frame_base;
+    var [u16] fp16;
+
+    set frame_base = lvk_cur_process * #LVK_FRAME_SIZE;
+    set fp16 = @lvk_frames + frame_base;
+    svi fp16;
+
+    /* slot 0 is always kept running */
+    set next = (lvk_cur_process + 1) % #LVK_MAX_PROCESSES;
+    while lvk_process_table<next>.status != #LVK_PROC_STAT_RUNNING {
+        set next = (next + 1) % #LVK_MAX_PROCESSES;
+    }
+
+    set frame_base = next * #LVK_FRAME_SIZE;
+    set fp16 = @lvk_frames + frame_base;
+    ldi fp16;
+
+    set lvk_cur_process = next;
+    set lvk_process_table<next>.run_count = lvk_process_table<next>.run_count + 1;
+}
+
+/* Timer IRQ handler. Fires every LVK_TICK_MS. Counts down sleeping processes, wakes any that hit
+   0, then switches. This is the only place sleep_ticks decrements. */
+fn lvk_timer_isr {
+    var u8 i;
+
+    asm { CLI }
+
+    set i = 0;
+    while i < #LVK_MAX_PROCESSES {
+        if lvk_process_table<i>.status == #LVK_PROC_STAT_SLEEPING {
+            set lvk_process_table<i>.sleep_ticks = lvk_process_table<i>.sleep_ticks - 1;
+            if lvk_process_table<i>.sleep_ticks == 0 {
+                set lvk_process_table<i>.status = #LVK_PROC_STAT_RUNNING;
+            }
+        }
+        incr i;
+    }
+
+    call lvk_do_switch;
+
+    rti;
+}
+
+/* Yield IRQ handler. Switches only, no sleep countdown. Kept separate from lvk_timer_isr so
+   voluntary yields don't sweep sleep_ticks more often than real ticks. */
+fn lvk_yield_isr {
+    asm { CLI }
+    call lvk_do_switch;
+    rti;
+}
+
+/* Kills the process in slot, unless it's slot 0 (the idle/boot process, never killable). If
+   killing the caller's own slot, stops it immediately via lvk_exit. */
+fn lvk_kill(u8 slot) {
+    if slot == 0 {
+        return;
+    }
+
+    set lvk_process_table<slot>.status = #LVK_PROC_STAT_NONE;
+
+    if slot == lvk_cur_process {
+        call lvk_exit;
+    }
+}
+
+/* Sets up the scheduler: marks the caller as process 0, arms the tick timer, installs the yield
+   IRQ handler. Call once at boot, before spawning any other process. */
+fn lvk_init() {
+    set lvk_process_table<0>.status = #LVK_PROC_STAT_RUNNING;
+    set lvk_cur_process = 0;
+
+    #ML_TIME_REGISTER_IRQ1(@lvk_timer_isr, #LVK_TICK_MS);
+    #ML_INT_REGISTER_IRQ(#LVK_YIELD_IRQ_ID, @lvk_yield_isr);
+}

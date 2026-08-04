@@ -1,56 +1,44 @@
-define REG_MS_OSC 0x6100;
-define REG_DMS_OSC 0x6101;
-define REG_HMS_OSC 0x6102;
-define REG_TIMER_RESET 0x610F;
+include mlib/interrupt.mlvc;
 
-var sleep_ms_n _sleep_ms_p;
-fn sleep_ms {
-    set REG_TIMER_RESET = 0;
-    set _sleep_ms_p = 0;
-    while (_sleep_ms_p < sleep_ms_n) {
-        asm {
-            #LND REG_MS_OSC #RDA
-            #LND @_sleep_ms_p #WRA
-        }
+define ML_TIME_MS_REG 0x6100;
+define ML_TIME_US_REG 0x6102;
+define ML_TIME_IRQ1_INTERVAL_REG 0x6104;
+define ML_TIME_IRQ2_INTERVAL_REG 0x6105;
+define ML_TIME_RESET_REG 0x610F;
+
+define ML_TIME_IRQ1_ID 0x10;
+define ML_TIME_IRQ2_ID 0x11;
+
+var u16 ml_time_ms @ #ML_TIME_MS_REG;
+var u16 ml_time_us @ #ML_TIME_US_REG;
+
+/* Installs HANDLER_ADDR and arms timer 1 to fire that IRQ every INTERVAL_MS. */
+macro ML_TIME_REGISTER_IRQ1(HANDLER_ADDR, INTERVAL_MS) {
+    #ML_INT_REGISTER_IRQ(#ML_TIME_IRQ1_ID, #HANDLER_ADDR);
+    set [#ML_TIME_IRQ1_INTERVAL_REG] = #INTERVAL_MS;
+}
+
+/* Installs HANDLER_ADDR and arms timer 2 to fire that IRQ every INTERVAL_MS. */
+macro ML_TIME_REGISTER_IRQ2(HANDLER_ADDR, INTERVAL_MS) {
+    #ML_INT_REGISTER_IRQ(#ML_TIME_IRQ2_ID, #HANDLER_ADDR);
+    set [#ML_TIME_IRQ2_INTERVAL_REG] = #INTERVAL_MS;
+}
+
+/* Busy-waits until n milliseconds have passed. Resets the timer first, so callers don't need to. */
+fn ml_time_delay_ms(u16 n) {
+    set [#ML_TIME_RESET_REG] = 0;
+    while (ml_time_ms < n) {
     }
 }
 
-var sleep_dms_n _sleep_dms_p;
-fn sleep_dms {
-    set REG_TIMER_RESET = 0;
-    set _sleep_dms_p = 0;
-    while (_sleep_dms_p < sleep_dms_n) {
-        asm {
-            #LND REG_DMS_OSC #RDA
-            #LND @_sleep_dms_p #WRA
-        }
-    }    
-}
-
-fn reset_timers {
-    set REG_TIMER_RESET = 0;
-}
-
-var get_ms_time_ret;
-fn get_ms_time {
-    asm {
-        #LND REG_MS_OSC #RDA
-        #LND @get_ms_time_ret #WRA
+/* Busy-waits until n microseconds have passed. Resets the timer first, so callers don't need to. */
+fn ml_time_delay_us(u16 n) {
+    set [#ML_TIME_RESET_REG] = 0;
+    while (ml_time_us < n) {
     }
 }
 
-var get_dms_time_ret;
-fn get_dms_time {
-    asm {
-        #LND REG_DMS_OSC #RDA
-        #LND @get_dms_time_ret #WRA
-    }
-}
-
-var get_hms_time_ret;
-fn get_hms_time {
-    asm {
-        #LND REG_HMS_OSC #RDA
-        #LND @get_hms_time_ret #WRA
-    }
+/* Resets the ms/us counters back to 0. */
+fn ml_time_reset {
+    set [#ML_TIME_RESET_REG] = 0;
 }

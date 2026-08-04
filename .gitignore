@@ -1,4 +1,4 @@
-/*.bin
-/*.mlvs
+*.bin
+*.mlvs
 !examples
 __pycache__

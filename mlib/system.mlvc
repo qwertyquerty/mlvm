@@ -1,17 +1,33 @@
-fn exit {
-    asm { #HLT }
+/* Halts the CPU. */
+fn ml_sys_exit {
+    asm { HLT }
 }
 
-asm {
-    .seekpush 0xFFE0
+/* NMI vector trampoline, fixed at the CPU's hardware NMI entry address. Looks up the handler
+   for the NMI id in A (multiplied by 2, since each vector slot is a u16) and jumps to it. */
+fn ml_sys_nmi_handler @ 0xFFE0 {
+    asm {
+        LIB 2
+        MUL
+        SAC
+        LIB 0x0400
+        ADD
+        RDC
+        JIC
+    }
+    rti;
+}
 
-    _nmi_handler:
-        #LNB 0x04
-        #RED
-        #SED
-        #IOR
-        #JIC
-        #RTI
-        
-    .seekpop
+/* Same as ml_sys_nmi_handler, but for IRQs. */
+fn ml_sys_irq_handler @ 0xFFC0 {
+    asm {
+        LIB 2
+        MUL
+        SAC
+        LIB 0x0600
+        ADD
+        RDC
+        JIC
+    }
+    rti;
 }

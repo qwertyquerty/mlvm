@@ -1,17 +1,13 @@
-define GP_BUTTONS_REG 0x6080;
-define GP_BUTTON_L 0x01;
-define GP_BUTTON_R 0x02;
-define GP_BUTTON_U 0x04;
-define GP_BUTTON_D 0x08;
-define GP_BUTTON_A 0x10;
-define GP_BUTTON_S 0x20;
-define GP_BUTTON_Z 0x40;
-define GP_BUTTON_X 0x80;
+define ML_GP_BUTTONS_REG 0x6080;
+define ML_GP_BUTTONS_L 0x01;
+define ML_GP_BUTTONS_R 0x02;
+define ML_GP_BUTTONS_U 0x04;
+define ML_GP_BUTTONS_D 0x08;
+define ML_GP_BUTTONS_A 0x10;
+define ML_GP_BUTTONS_S 0x20;
+define ML_GP_BUTTONS_Z 0x40;
+define ML_GP_BUTTONS_X 0x80;
 
-var gp_buttons_ret;
-fn gp_buttons {
-    asm {
-        #LND GP_BUTTONS_REG #RDA
-        #LND @gp_buttons_ret #WRA
-    }
-}
+/* Gamepad button register. Each bit is one held button */
+var u8 ml_gp_buttons @ #ML_GP_BUTTONS_REG;
+

@@ -1,0 +1,89 @@
+include mlib/gamepad.mlvc;
+include mlib/graphics.mlvc;
+include mlib/system.mlvc;
+include mlib/color.mlvc;
+
+define PADDLE_WIDTH 40;
+define PADDLE_HEIGHT 4;
+define PADDLE_Y 250;
+define BALL_SIZE 5;
+define SCREEN_SIZE 256;
+
+var u8 paddle_x score buttons;
+
+struct ball.t {
+    u8 x;
+    u8 y;
+    i8 vx;
+    i8 vy;
+    u8 size;
+};
+
+var ball.t ball;
+
+begin
+asm { CLI }
+#ML_GX_REGISTER_FLIP_ISR();
+#ML_GX_SET_FPS(120);
+asm { STI }
+
+set score = 0;
+set paddle_x = 2;
+
+set ball.x = 30;
+set ball.y = 0;
+set ball.vx = -1;
+set ball.vy = 1;
+set ball.size = 5;
+
+while 1 {
+    #ML_GX_CLEAR();
+
+    /* Right button */
+    if ml_gp_buttons & #ML_GP_BUTTONS_R && paddle_x < (#SCREEN_SIZE-#PADDLE_WIDTH) {
+        set paddle_x = paddle_x + 1;
+    }
+
+    /* Left button */
+    if ml_gp_buttons & #ML_GP_BUTTONS_L && paddle_x > 0 {
+        set paddle_x = paddle_x - 1;
+    }
+
+    /* Move ball */
+    set ball.x = ball.x + ball.vx;
+    set ball.y = ball.y + ball.vy;
+
+    if ball.x == (#SCREEN_SIZE-ball.size) && ball.vx == 1 { /* Right edge */
+        set ball.vx = -1;
+    }
+
+    if ball.x == 0 && ball.vx == -1 { /* Left edge */
+        set ball.vx = 1;
+    }
+
+    if ball.y == 0 && ball.vy == -1 { /* Top edge */
+        set ball.vy = 1;
+        set score = score + 1;
+    }
+
+    if (ball.y + ball.size) >= #SCREEN_SIZE { /* Bottom edge */
+        call ml_sys_exit;
+    }
+
+    if /* Paddle Collisions */
+        ball.y == (#PADDLE_Y-ball.size) && ball.vy == 1 && (ball.x + ball.size) > paddle_x && ball.x < (paddle_x + #PADDLE_WIDTH+ball.size)
+    {
+        set ball.vy = -1;
+    }
+
+    /* Draw ball */
+    #ML_GX_DRAW_RECT(ball.x, ball.y, ball.size, ball.size, #ML_CLR_LAVENDER);
+
+    /* Draw paddle */
+    #ML_GX_DRAW_RECT(paddle_x, #PADDLE_Y, #PADDLE_WIDTH, #PADDLE_HEIGHT, #ML_CLR_WHITE);
+
+    /* Draw score */
+    #ML_GX_DRAW_RECT(1, 1, score, 1, #ML_CLR_LAVENDER);
+
+    call ml_gx_flip_sync;
+}

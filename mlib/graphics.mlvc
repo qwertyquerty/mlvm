@@ -1,53 +1,90 @@
-define GRAPHICS_REG_X 0x6000;
-define GRAPHICS_REG_Y 0x6001;
-define GRAPHICS_REG_W 0x6002;
-define GRAPHICS_REG_H 0x6003;
+include mlib/interrupt.mlvc;
+include mlib/color.mlvc;
 
-define GRAPHICS_REG_PIXL 0x6004;
-define GRAPHICS_REG_FILL 0x6005;
-define GRAPHICS_REG_RECT 0x6006;
+var u8 ml_gx_reg_x @ 0x6000;
+var u8 ml_gx_reg_y @ 0x6001;
+var u8 ml_gx_reg_w @ 0x6002;
+var u8 ml_gx_reg_h @ 0x6003;
 
-define GRAPHICS_REG_FLIP 0x600A;
+var u8 ml_gx_reg_pixl @ 0x6004;
+var u8 ml_gx_reg_fill @ 0x6005;
+var u8 ml_gx_reg_rect @ 0x6006;
 
-fn screen_clear {
-    set GRAPHICS_REG_FILL = 1;
+var u8 ml_gx_reg_fps @ 0x600A;
+
+var u8 ml_gx_reg_texram_pixl @ 0x600C;
+var u8 ml_gx_reg_texram_src_x @ 0x600D;
+var u8 ml_gx_reg_texram_src_y @ 0x600E;
+var u8 ml_gx_reg_texram_blit @ 0x600F;
+
+define ML_GX_BLEND_DEFAULT 0;
+define ML_GX_BLEND_ADD 1;
+define ML_GX_BLEND_SUB 2;
+define ML_GX_BLEND_MULT 3;
+define ML_GX_BLEND_MIN 4;
+define ML_GX_BLEND_MAX 5;
+
+/* Fills the whole screen with black. */
+macro ML_GX_CLEAR() {
+    set ml_gx_reg_fill = #ML_CLR_BLACK;
 }
 
-var pix_x pix_y pix_c;
-fn set_pixel {
-    set GRAPHICS_REG_X = pix_x;
-    set GRAPHICS_REG_Y = pix_y;
-    set GRAPHICS_REG_PIXL = pix_c;
+/* Fills the whole screen with color C. */
+macro ML_GX_FILL(C) {
+    set ml_gx_reg_fill = #C;
 }
 
-var rect_x rect_y rect_w rect_h rect_c;
-fn draw_rect {
-    set GRAPHICS_REG_X = rect_x;
-    set GRAPHICS_REG_Y = rect_y;
-    set GRAPHICS_REG_W = rect_w;
-    set GRAPHICS_REG_H = rect_h;
-    set GRAPHICS_REG_RECT = rect_c;
+/* Sets the frequency for buffer presentation and the flip NMI */
+macro ML_GX_SET_FPS(FPS) {
+    set ml_gx_reg_fps = #FPS;
 }
 
-var gfx_flip_status;
-fn flip_sync {
+/* Sets one pixel at (X, Y) to color C. */
+macro ML_GX_SET_PIXEL(X, Y, C) {
+    set ml_gx_reg_x = #X;
+    set ml_gx_reg_y = #Y;
+    set ml_gx_reg_pixl = #C;
+}
+
+/* Draws a filled rect at (X, Y), size (W, H), color C. */
+macro ML_GX_DRAW_RECT(X, Y, W, H, C) {
+    set ml_gx_reg_x = #X;
+    set ml_gx_reg_y = #Y;
+    set ml_gx_reg_w = #W;
+    set ml_gx_reg_h = #H;
+    set ml_gx_reg_rect = #C;
+}
+
+/* Blits a (W, H) region from texram at (SRCX, SRCY) to the screen at (DSTX, DSTY). */
+macro ML_GX_PAINT_TEXRAM(SRCX, SRCY, DSTX, DSTY, W, H, BLEND_MODE) {
+    set ml_gx_reg_texram_src_x = #SRCX;
+    set ml_gx_reg_texram_src_y = #SRCY;
+    set ml_gx_reg_x = #DSTX;
+    set ml_gx_reg_y = #DSTY;
+    set ml_gx_reg_w = #W;
+    set ml_gx_reg_h = #H;
+    set ml_gx_reg_texram_blit = #BLEND_MODE;
+}
+
+var u8 gfx_flip_status;
+
+/* Blocks until the next frame flip. Pairs with ml_gx_flip_isr, which the video peripheral
+   triggers via NMI once per frame. */
+fn ml_gx_flip_sync() {
     set gfx_flip_status = 0;
     while (gfx_flip_status == 0) {
 
     }
 }
 
-fn flip_isr {
+fn ml_gx_flip_isr {
     set gfx_flip_status = 1;
     rti;
 }
 
-define GRAPHICS_FLIP_ISR_VEC 0x440;
+define ML_GX_FLIP_NMI_ID 0x40;
 
-fn register_flip_isr {
-    asm {
-        #LND GRAPHICS_FLIP_ISR_VEC
-        #LNE @flip_isr
-        #WRE
-    }
+/* Installs ml_gx_flip_isr as the frame-flip NMI handler. Call once at boot. */
+macro ML_GX_REGISTER_FLIP_ISR() {
+    #ML_INT_REGISTER_NMI(#ML_GX_FLIP_NMI_ID, @ml_gx_flip_isr);
 }

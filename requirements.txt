@@ -1,2 +1,4 @@
-pygame
-black
+pygame==2.3.0
+black==25.11.0
+flake8==7.3.0
+pytest==8.4.2

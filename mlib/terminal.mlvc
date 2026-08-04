@@ -1,0 +1,208 @@
+include mlib/font.mlvc;
+include mlib/string.mlvc;
+
+define ML_TERM_WIDTH 32;
+define ML_TERM_HEIGHT 32;
+define ML_TERM_SIZE 1024;
+define ML_TERM_CHAR_W 8;
+define ML_TERM_CHAR_H 8;
+define ML_TERM_BLANK ' ';
+define ML_TERM_NEWLINE '\n';
+define ML_TERM_CR '\r';
+
+define ML_TERM_BG_COLOR 1;
+
+/* What should be on screen, one char per cell. */
+alloc u8 #ML_TERM_SIZE ml_term_buffer;
+
+/* What's actually on screen right now. ml_term_draw diffs against this to only redraw changed
+   cells instead of the whole grid every frame. */
+alloc u8 #ML_TERM_SIZE ml_term_drawn_buffer;
+
+var u8 ml_term_cursor_col;
+var u8 ml_term_cursor_row;
+
+fn ml_term_setpos(u8 col, u8 row) {
+    set ml_term_cursor_col = col;
+    set ml_term_cursor_row = row;
+}
+
+/* Blanks the whole terminal buffer and screen, and resets the cursor. */
+fn ml_term_clear {
+    var u8 row;
+    var u8 col;
+    var u16 row_base;
+    var u8 row_pixel_y;
+    var [u8] p;
+    var [u8] pd;
+
+    set ml_term_cursor_col = 0;
+    set ml_term_cursor_row = 0;
+
+    #ML_GX_CLEAR();
+
+    set row = 0;
+    while row < #ML_TERM_HEIGHT {
+        set row_base = row * #ML_TERM_WIDTH;
+        set row_pixel_y = row * #ML_TERM_CHAR_H;
+
+        set col = 0;
+        while col < #ML_TERM_WIDTH {
+            set p = @ml_term_buffer + row_base + col;
+            set [p] = #ML_TERM_BLANK;
+            set pd = @ml_term_drawn_buffer + row_base + col;
+            set [pd] = #ML_TERM_BLANK;
+            #ML_FONT_PAINT_CHAR(col * #ML_TERM_CHAR_W, row_pixel_y, #ML_TERM_BLANK);
+            incr col;
+        }
+        incr row;
+    }
+}
+
+/* Blits one glyph at cell (COL, ROW). */
+macro ML_TERM_PAINT_CELL(COL, ROW, CHAR) {
+    set ml_gx_reg_texram_src_x = ((#CHAR) % 16) * #ML_TERM_CHAR_W;
+    set ml_gx_reg_texram_src_y = ((#CHAR) / 16) * #ML_TERM_CHAR_H;
+    set ml_gx_reg_x = (#COL) * #ML_TERM_CHAR_W;
+    set ml_gx_reg_y = (#ROW) * #ML_TERM_CHAR_H;
+    set ml_gx_reg_w = #ML_TERM_CHAR_W;
+    set ml_gx_reg_h = #ML_TERM_CHAR_H;
+    set ml_gx_reg_texram_blit = #ML_GX_BLEND_DEFAULT;
+}
+
+/* Redraws only the cells that changed since the last draw. Call once per frame. */
+fn ml_term_draw {
+    var u8 row;
+    var u8 col;
+    var u16 row_base;
+    var u8 row_pixel_y;
+    var [u8] p;
+    var [u8] pd;
+    var u8 c;
+    var u8 cd;
+
+    set row = 0;
+    while row < #ML_TERM_HEIGHT {
+        set row_base = row * #ML_TERM_WIDTH;
+        set row_pixel_y = row * #ML_TERM_CHAR_H;
+
+        set p = @ml_term_buffer + row_base;
+        set pd = @ml_term_drawn_buffer + row_base;
+        set col = 0;
+        while col < #ML_TERM_WIDTH {
+            set c = [p];
+            set cd = [pd];
+            if c != cd {
+                if c != #ML_TERM_BLANK {
+                    #ML_TERM_PAINT_CELL(col, row, c);
+                }
+                if c == #ML_TERM_BLANK {
+                    #ML_GX_DRAW_RECT(col * #ML_TERM_CHAR_W, row_pixel_y, #ML_TERM_CHAR_W, #ML_TERM_CHAR_H, #ML_TERM_BG_COLOR);
+                }
+                set [pd] = c;
+            }
+            incr p;
+            incr pd;
+            incr col;
+        }
+        incr row;
+    }
+}
+
+/* Writes one char at the cursor and advances it, handling newline, CR, and line wrap. */
+fn ml_term_put_char(u8 c) {
+    var u8 is_control;
+    var [u8] p;
+
+    set is_control = 0;
+
+    if c == #ML_TERM_NEWLINE {
+        set ml_term_cursor_col = 0;
+        incr ml_term_cursor_row;
+        set is_control = 1;
+    }
+    if c == #ML_TERM_CR {
+        set ml_term_cursor_col = 0;
+        set is_control = 1;
+    }
+
+    if is_control == 0 {
+        set p = @ml_term_buffer + ml_term_cursor_row * #ML_TERM_WIDTH + ml_term_cursor_col;
+        set [p] = c;
+        #ML_FONT_PAINT_CHAR(ml_term_cursor_col * #ML_TERM_CHAR_W, ml_term_cursor_row * #ML_TERM_CHAR_H, c);
+        incr ml_term_cursor_col;
+
+        if ml_term_cursor_col == #ML_TERM_WIDTH {
+            set ml_term_cursor_col = 0;
+            incr ml_term_cursor_row;
+        }
+    }
+
+    if ml_term_cursor_row == #ML_TERM_HEIGHT {
+        set ml_term_cursor_row = 0;
+    }
+}
+
+/* Writes one char directly at (col, row), no cursor movement. */
+fn ml_term_put_char_at(u8 col, u8 row, u8 c) {
+    var [u8] p;
+    set p = @ml_term_buffer + row * #ML_TERM_WIDTH + col;
+    set [p] = c;
+}
+
+/* Writes a null-terminated string starting at (col, row), no wrapping. */
+fn ml_term_print_at(u8 col, u8 row, [u8] str) {
+    var [u8] p;
+    var u8 c;
+    var u8 i;
+
+    set p = str;
+    set i = 0;
+    set c = [p];
+    while c > 0 {
+        call ml_term_put_char_at(col + i, row, c);
+        incr i;
+        incr p;
+        set c = [p];
+    }
+}
+
+/* Blanks one row. */
+fn ml_term_clear_row(u8 row) {
+    var u8 col;
+    var [u8] p;
+
+    set col = 0;
+    while col < #ML_TERM_WIDTH {
+        set p = @ml_term_buffer + row * #ML_TERM_WIDTH + col;
+        set [p] = #ML_TERM_BLANK;
+        incr col;
+    }
+}
+
+/* Writes a null-terminated string at the cursor, one char at a time. */
+fn ml_term_print([u8] str) {
+    var [u8] p;
+    var u8 c;
+
+    set p = str;
+    set c = [p];
+    while c > 0 {
+        call ml_term_put_char(c);
+        incr p;
+        set c = [p];
+    }
+}
+
+/* Draws one hex digit at (COL, ROW). */
+macro ML_TERM_PRINT_HEX_NIBBLE(COL, ROW, NIBBLE) {
+    call ml_term_put_char_at(#COL, #ROW, #ML_STR_HEX_NIBBLE_CHAR(#NIBBLE));
+}
+
+/* Prints value as 4 hex digits starting at (col, row). */
+fn ml_term_print_hex_u16(u8 col, u8 row, u16 value) {
+    #ML_TERM_PRINT_HEX_NIBBLE(col, row, (value / 4096) % 16);
+    #ML_TERM_PRINT_HEX_NIBBLE(col + 1, row, (value / 256) % 16);
+    #ML_TERM_PRINT_HEX_NIBBLE(col + 2, row, (value / 16) % 16);
+    #ML_TERM_PRINT_HEX_NIBBLE(col + 3, row, value % 16);
+}

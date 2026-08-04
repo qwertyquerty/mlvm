@@ -1,3 +1,12 @@
 [flake8]
 max-line-length = 120
 extend-ignore = E203, W503
+per-file-ignores =
+    # Package aggregators: re-export everything from their submodules on purpose
+    mlvm/devices/__init__.py:F401,F403
+    mlvm/devices/peripherals/__init__.py:F401,F403
+    mlvm/instructions/__init__.py:F401,F403
+    # PYGAME_HIDE_SUPPORT_PROMPT must be set before importing pygame
+    mlvm/devices/peripherals/gamepad.py:E402
+    mlvm/devices/peripherals/keyboard.py:E402
+    mlvm/devices/peripherals/video.py:E402

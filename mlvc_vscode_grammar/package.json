@@ -2,7 +2,7 @@
   "name": "mlvc-grammar",
   "displayName": "MLVC Grammar",
   "description": "Syntax hilighting for MLVC code",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "engines": {
     "vscode": "^1.87.0"
   },
@@ -10,16 +10,31 @@
     "Programming Languages"
   ],
   "contributes": {
-    "languages": [{
-      "id": "mlvc",
-      "aliases": ["mlvc", "mlvc"],
-      "extensions": [".mlvc"],
-      "configuration": "./language-configuration.json"
-    }],
-    "grammars": [{
-      "language": "mlvc",
-      "scopeName": "source.mlvc",
-      "path": "./syntaxes/mlvc.tmLanguage.json"
-    }]
+    "languages": [
+      {
+        "id": "mlvc",
+        "aliases": ["mlvc", "mlvc"],
+        "extensions": [".mlvc"],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "mlvs",
+        "aliases": ["mlvs", "mlvs"],
+        "extensions": [".mlvs"],
+        "configuration": "./mlvs-language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "mlvc",
+        "scopeName": "source.mlvc",
+        "path": "./syntaxes/mlvc.tmLanguage.json"
+      },
+      {
+        "language": "mlvs",
+        "scopeName": "source.mlvs",
+        "path": "./syntaxes/mlvs.tmLanguage.json"
+      }
+    ]
   }
 }

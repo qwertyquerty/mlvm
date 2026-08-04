@@ -1,0 +1,18 @@
+/* Vector tables. Each slot is a u16 handler address, so ID is indexed as ID*2. */
+define ML_INT_NMI_TABLE_START 0x400;
+define ML_INT_IRQ_TABLE_START 0x600;
+
+/* Installs HANDLER_ADDR as the handler for NMI id ID. */
+macro ML_INT_REGISTER_NMI(ID, HANDLER_ADDR) {
+    set [u16 #ML_INT_NMI_TABLE_START + (#ID) * 2] = #HANDLER_ADDR;
+}
+
+/* Installs HANDLER_ADDR as the handler for IRQ id ID. */
+macro ML_INT_REGISTER_IRQ(ID, HANDLER_ADDR) {
+    set [u16 #ML_INT_IRQ_TABLE_START + (#ID) * 2] = #HANDLER_ADDR;
+}
+
+/* Raises IRQ ID right now, via the INT instruction. */
+macro ML_INT_TRIGGER(ID) {
+    asm { INT #ID }
+}

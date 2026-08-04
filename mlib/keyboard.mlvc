@@ -1,0 +1,88 @@
+include mlib/interrupt.mlvc;
+
+define ML_KB_REG_KEY 0x6180;
+define ML_KB_IRQ_ID 0x12;
+
+/* Key-up events set this bit on the raw code, key-down events leave it clear. */
+define ML_KB_KEY_UP_BIT 0x80;
+
+define ML_KB_KEY_SHIFT_L 0x01;
+define ML_KB_KEY_SHIFT_R 0x02;
+
+define ML_KB_RING_SIZE 32;
+
+/* Ring buffer of received key codes, filled by ml_kb_isr and drained by ml_kb_read. */
+alloc u8 #ML_KB_RING_SIZE kb_ring_buffer;
+var u8 ml_kb_ring_head;
+var u8 ml_kb_ring_tail;
+var u8 ml_kb_shift_held;
+
+/* Keyboard IRQ handler. Reads the raw key event, tracks shift state, and pushes printable
+   key-down codes into the ring buffer. */
+fn ml_kb_isr {
+    var u8 raw;
+    var u8 code;
+    var u8 next_tail;
+    var [u8] p;
+
+    set raw = [#ML_KB_REG_KEY];
+
+    if raw < #ML_KB_KEY_UP_BIT {
+        set code = raw;
+        if code >= 3 {
+            /* codes 0-2 are shift/control codes, not printable, handled below instead */
+            if ml_kb_shift_held == 1 {
+                if code >= 97 {
+                    if code <= 122 {
+                        set code = code - 32; /* lowercase a-z to uppercase */
+                    }
+                }
+            }
+
+            set next_tail = (ml_kb_ring_tail + 1) % #ML_KB_RING_SIZE;
+            if next_tail != ml_kb_ring_head {
+                set p = @kb_ring_buffer + ml_kb_ring_tail;
+                set [p] = code;
+                set ml_kb_ring_tail = next_tail;
+            }
+        }
+        if code < 3 {
+            if code == #ML_KB_KEY_SHIFT_L {
+                set ml_kb_shift_held = 1;
+            }
+            if code == #ML_KB_KEY_SHIFT_R {
+                set ml_kb_shift_held = 1;
+            }
+        }
+    }
+    if raw >= #ML_KB_KEY_UP_BIT {
+        set code = raw - #ML_KB_KEY_UP_BIT;
+        if code == #ML_KB_KEY_SHIFT_L {
+            set ml_kb_shift_held = 0;
+        }
+        if code == #ML_KB_KEY_SHIFT_R {
+            set ml_kb_shift_held = 0;
+        }
+    }
+
+    rti;
+}
+
+macro ML_KB_REGISTER_ISR() {
+    #ML_INT_REGISTER_IRQ(#ML_KB_IRQ_ID, @ml_kb_isr);
+}
+
+/* Pops the next buffered key code, or 0 if nothing is waiting. */
+fn ml_kb_read {
+    var u8 c;
+    var [u8] p;
+
+    set c = 0;
+    if ml_kb_ring_head != ml_kb_ring_tail {
+        set p = @kb_ring_buffer + ml_kb_ring_head;
+        set c = [p];
+        set ml_kb_ring_head = (ml_kb_ring_head + 1) % #ML_KB_RING_SIZE;
+    }
+
+    return c;
+}

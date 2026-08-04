@@ -1,0 +1,52 @@
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"name": "mlvs",
+	"patterns": [
+		{
+			"name": "comment.block.mlvs",
+			"begin": "\\/\\*",
+			"end": "\\*\\/"
+		},
+		{
+			"name": "string.quoted.double.mlvs",
+			"begin": "\"",
+			"end": "\"",
+			"patterns": [
+				{ "name": "constant.character.escape.mlvs", "match": "\\\\." }
+			]
+		},
+		{
+			"name": "string.quoted.single.mlvs",
+			"begin": "'",
+			"end": "'",
+			"patterns": [
+				{ "name": "constant.character.escape.mlvs", "match": "\\\\." }
+			]
+		},
+		{
+			"name": "keyword.control.directive.mlvs",
+			"match": "\\.[a-zA-Z_]+[a-zA-Z0-9_]*"
+		},
+		{
+			"name": "entity.name.function.mlvs",
+			"match": "[a-zA-Z_]+[a-zA-Z0-9_]*:"
+		},
+		{
+			"name": "variable.other.constant.mlvs",
+			"match": "\\$[a-zA-Z_]+[a-zA-Z0-9_]*"
+		},
+		{
+			"name": "constant.numeric.mlvs",
+			"match": "(0x[0-9A-Fa-f]+|0b[01]+|-?[0-9]+)"
+		},
+		{
+			"name": "keyword.mnemonic.mlvs",
+			"match": "\\b(ADD|AND|ANL|CLI|CMP|DEA|DEB|DEC|DEI|DEI8|DES|DES8|DIV|GTC|GTE|HLT|INA|INB|INC|INI|INI8|INS|INS8|INT|IOR|JAI|JBI|JCI|JIA|JIB|JIC|JIX|JIY|JIZ|JMI|JMP|JSC|JXI|JYI|JZI|LDI|LIA|LIA8|LIA8S|LIB|LIB8|LIB8S|LIC|LIC8|LIC8S|LSS|LTC|LTE|MOD|MUL|NEQ|NOT|PSHA|PSHA8|PSHB|PSHB8|PSHC|PSHC8|PSHD|PSHD8|PSHI|PSHI8|PSHN|PULA|PULA8|PULB|PULB8|PULC|PULC8|PULD|PULD8|PULN|RDA|RDA8|RDA8S|RDB|RDB8|RDB8S|RDC|RDC8|RDC8S|RET|RIA|RIA8|RIA8S|RIB|RIB8|RIB8S|RIC|RIC8|RIC8S|RSA|RSA8|RSA8S|RSB|RSB8|RSB8S|RSC|RSC8|RSC8S|RSS|RTI|SAB|SAC|SAD|SAS|SBA|SBC|SBD|SCA|SCB|SCD|SDC|SGE|SGT|SIA|SIB|SIC|SLE|SLT|SOF|SRI|SRT|STI|SUB|SVI|WIA|WIA8|WIB|WIB8|WIC|WIC8|WII|WII8|WRA|WRA8|WRB|WRB8|WRC|WRC8|WSA|WSA8|WSB|WSB8|WSC|WSC8|XOR)\\b"
+		},
+		{
+			"name": "variable.other.readwrite.mlvs",
+			"match": "[a-zA-Z_]+[a-zA-Z0-9_]*"
+		}
+	],
+	"scopeName": "source.mlvs"
+}
