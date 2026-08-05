@@ -1,0 +1,40 @@
+/* Copies len bytes from src to dst. */
+fn ml_mem_copy([u8] dst, [u8] src, u16 len) {
+    var u16 i;
+
+    set i = 0;
+    while i < len {
+        set [dst] = [src];
+        incr dst;
+        incr src;
+        incr i;
+    }
+}
+
+/* Fills len bytes at dst with value. */
+fn ml_mem_set([u8] dst, u8 value, u16 len) {
+    var u16 i;
+
+    set i = 0;
+    while i < len {
+        set [dst] = value;
+        incr dst;
+        incr i;
+    }
+}
+
+/* Returns 1 if the a and b regions of length len are byte for byte identical, else 0. */
+fn ml_mem_equal([u8] a, [u8] b, u16 len) {
+    var u16 i;
+
+    set i = 0;
+    while i < len {
+        if [a] != [b] {
+            return 0;
+        }
+        incr a;
+        incr b;
+        incr i;
+    }
+    return 1;
+}
