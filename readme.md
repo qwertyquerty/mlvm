@@ -38,6 +38,8 @@ By default, address space is laid out as shown below
     - `0x6000 ... 0x607F`: Video Peripheral Registers
     - `0x6080 ... 0x60FF`: Gamepad Peripheral Registers
     - `0x6100 ... 0x617F`: Timer Peripheral Registers
+    - `0x6180 ... 0x61FF`: Keyboard Peripheral Registers
+    - `0x6200 ... 0x627F`: Block Storage Peripheral Registers
 - `0x8000 ... 0xFFFF`: Read Only Memory
     - `0x8000 ... 0x????`: Binary Executable
 

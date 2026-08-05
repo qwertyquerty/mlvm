@@ -1,0 +1,149 @@
+include mlib/interrupt.mlvc;
+
+define ML_STORAGE_BLOCK_REG 0x6200;
+define ML_STORAGE_OFFSET_REG 0x6202;
+define ML_STORAGE_DATA_REG 0x6203;
+define ML_STORAGE_STREAM_REG 0x6204;
+define ML_STORAGE_BLOCK_SIZE 256;
+
+/* Selects the 256 byte block to operate on. Resets the shared offset to 0. */
+macro ML_STORAGE_SELECT_BLOCK(BLOCK) {
+    set [u16 #ML_STORAGE_BLOCK_REG] = #BLOCK;
+}
+
+/* Points the shared offset at a byte (0-255) within the selected block. */
+macro ML_STORAGE_SEEK(OFFSET) {
+    set [#ML_STORAGE_OFFSET_REG] = #OFFSET;
+}
+
+/* Reads/writes the byte at the current offset without moving it. */
+macro ML_STORAGE_READ_BYTE() {
+    [#ML_STORAGE_DATA_REG]
+}
+macro ML_STORAGE_WRITE_BYTE(VALUE) {
+    set [#ML_STORAGE_DATA_REG] = #VALUE;
+}
+
+/* Reads/writes the byte at the current offset, then advances it, wrapping at 256. */
+macro ML_STORAGE_STREAM_READ() {
+    [#ML_STORAGE_STREAM_REG]
+}
+macro ML_STORAGE_STREAM_WRITE(VALUE) {
+    set [#ML_STORAGE_STREAM_REG] = #VALUE;
+}
+
+
+/* Streams block_num's 256 bytes into dst. */
+fn ml_storage_read_block(u16 block_num, [u8] dst) {
+    var u16 i;
+
+    #ML_INT_ENTER_CRITICAL_SECTION();
+    #ML_STORAGE_SELECT_BLOCK(block_num);
+    set i = 0;
+    while i < #ML_STORAGE_BLOCK_SIZE {
+        set [dst] = #ML_STORAGE_STREAM_READ();
+        incr dst;
+        set [dst] = #ML_STORAGE_STREAM_READ();
+        incr dst;
+        set [dst] = #ML_STORAGE_STREAM_READ();
+        incr dst;
+        set [dst] = #ML_STORAGE_STREAM_READ();
+        incr dst;
+        set i = i + 4;
+    }
+    #ML_INT_EXIT_CRITICAL_SECTION();
+}
+
+/* Streams src's 256 bytes to block_num. */
+fn ml_storage_write_block(u16 block_num, [u8] src) {
+    var u16 i;
+
+    #ML_INT_ENTER_CRITICAL_SECTION();
+    #ML_STORAGE_SELECT_BLOCK(block_num);
+    set i = 0;
+    while i < #ML_STORAGE_BLOCK_SIZE {
+        #ML_STORAGE_STREAM_WRITE([src]);
+        incr src;
+        #ML_STORAGE_STREAM_WRITE([src]);
+        incr src;
+        #ML_STORAGE_STREAM_WRITE([src]);
+        incr src;
+        #ML_STORAGE_STREAM_WRITE([src]);
+        incr src;
+        set i = i + 4;
+    }
+    #ML_INT_EXIT_CRITICAL_SECTION();
+}
+
+/* Reads len bytes at offset within block_num, at random access, cheaper than
+   ml_storage_read_block when len is well under 256. */
+fn ml_storage_read_bytes(u16 block_num, u8 offset, [u8] dst, u16 len) {
+    var u16 i;
+
+    #ML_INT_ENTER_CRITICAL_SECTION();
+    #ML_STORAGE_SELECT_BLOCK(block_num);
+    #ML_STORAGE_SEEK(offset);
+    set i = 0;
+    while i < len {
+        set [dst] = #ML_STORAGE_STREAM_READ();
+        incr dst;
+        incr i;
+    }
+    #ML_INT_EXIT_CRITICAL_SECTION();
+}
+
+/* Writes len bytes from src to offset within block_num, at random access. */
+fn ml_storage_write_bytes(u16 block_num, u8 offset, [u8] src, u16 len) {
+    var u16 i;
+
+    #ML_INT_ENTER_CRITICAL_SECTION();
+    #ML_STORAGE_SELECT_BLOCK(block_num);
+    #ML_STORAGE_SEEK(offset);
+    set i = 0;
+    while i < len {
+        #ML_STORAGE_STREAM_WRITE([src]);
+        incr src;
+        incr i;
+    }
+    #ML_INT_EXIT_CRITICAL_SECTION();
+}
+
+/* Zeroes a whole block. */
+fn ml_storage_zero_block(u16 block_num) {
+    var u16 i;
+
+    #ML_INT_ENTER_CRITICAL_SECTION();
+    #ML_STORAGE_SELECT_BLOCK(block_num);
+    set i = 0;
+    while i < #ML_STORAGE_BLOCK_SIZE {
+        #ML_STORAGE_STREAM_WRITE(0);
+        #ML_STORAGE_STREAM_WRITE(0);
+        #ML_STORAGE_STREAM_WRITE(0);
+        #ML_STORAGE_STREAM_WRITE(0);
+        set i = i + 4;
+    }
+    #ML_INT_EXIT_CRITICAL_SECTION();
+}
+
+/* Reads a little-endian u16 at offset within block_num. */
+fn ml_storage_read_u16(u16 block_num, u8 offset) {
+    var u8 lo hi;
+
+    #ML_INT_ENTER_CRITICAL_SECTION();
+    #ML_STORAGE_SELECT_BLOCK(block_num);
+    #ML_STORAGE_SEEK(offset);
+    set lo = #ML_STORAGE_STREAM_READ();
+    set hi = #ML_STORAGE_STREAM_READ();
+    #ML_INT_EXIT_CRITICAL_SECTION();
+    return lo | (hi << 8);
+}
+
+/* Writes a little-endian u16 at offset within block_num. */
+fn ml_storage_write_u16(u16 block_num, u8 offset, u16 value) {
+    #ML_INT_ENTER_CRITICAL_SECTION();
+    #ML_STORAGE_SELECT_BLOCK(block_num);
+    #ML_STORAGE_SEEK(offset);
+    #ML_STORAGE_STREAM_WRITE(value & 0xFF);
+    #ML_STORAGE_STREAM_WRITE((value >> 8) & 0xFF);
+    #ML_INT_EXIT_CRITICAL_SECTION();
+}

@@ -1,3 +1,51 @@
+/* Returns the length of a null-terminated string, not including the null byte. */
+fn ml_str_len([u8] s) {
+    var u16 len;
+
+    set len = 0;
+    while [s] != 0 {
+        incr s;
+        incr len;
+    }
+    return len;
+}
+
+/* Copies src into the field dst, stopping at src's null terminator or after len bytes,
+   whichever comes first, then zero-fills any remaining bytes of dst. For fixed-width fields. */
+fn ml_str_copy_fixed([u8] dst, [u8] src, u16 len) {
+    var u16 i;
+    var u8 c;
+
+    set i = 0;
+    while i < len {
+        set c = [src];
+        set [dst] = c;
+        if c == 0 {
+            incr dst;
+            incr i;
+            while i < len {
+                set [dst] = 0;
+                incr dst;
+                incr i;
+            }
+            return;
+        }
+        incr dst;
+        incr src;
+        incr i;
+    }
+}
+
+/* Copies src into dst, including the null terminator. */
+fn ml_str_copy([u8] dst, [u8] src) {
+    while [src] != 0 {
+        set [dst] = [src];
+        incr dst;
+        incr src;
+    }
+    set [dst] = 0;
+}
+
 /* Returns 1 if the two null-terminated strings are equal, else 0. */
 fn ml_str_eq([u8] a, [u8] b) {
     var u8 ca;
@@ -48,8 +96,7 @@ macro ML_STR_CHAR_TO_DIGIT(C) {
     ((#C) - 48)
 }
 
-/* Hex nibble (0-15) to ASCII char ('0'-'9' or 'A'-'F'). Branchless: adds 7 when N >= 10 to jump
-   over the ':' - '@' gap between '9' and 'A'. */
+/* Hex nibble (0-15) to ASCII char ('0'-'9' or 'A'-'F'). */
 macro ML_STR_HEX_NIBBLE_CHAR(N) {
     ((#N) + 48 + (((#N) >= 10) * 7))
 }

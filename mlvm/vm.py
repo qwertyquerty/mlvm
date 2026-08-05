@@ -13,6 +13,7 @@ from mlvm.devices import (
     MLVMGamepad,
     MLVMTimer,
     MLVMKeyboard,
+    MLVMStorage,
 )
 from mlvm.const import (
     RAM_START,
@@ -23,12 +24,13 @@ from mlvm.const import (
     PERIPH_ID_GAMEPAD,
     PERIPH_ID_TIMER,
     PERIPH_ID_KEYBOARD,
+    PERIPH_ID_STORAGE,
     CPU_GOAL_CLOCK,
     CPU_SLEEP_INTERVAL,
 )
 
 
-def build_machine(rom_path):
+def build_machine(rom_path, storage_path="storage.img"):
     bus = MLVMBus()
 
     MLVMProcessor(bus)
@@ -42,6 +44,7 @@ def build_machine(rom_path):
     MLVMGamepad(bus, PERIPH_ID_GAMEPAD)
     MLVMTimer(bus, PERIPH_ID_TIMER)
     MLVMKeyboard(bus, PERIPH_ID_KEYBOARD)
+    MLVMStorage(bus, PERIPH_ID_STORAGE, storage_path)
 
     return bus
 

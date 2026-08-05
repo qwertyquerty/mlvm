@@ -16,3 +16,22 @@ macro ML_INT_REGISTER_IRQ(ID, HANDLER_ADDR) {
 macro ML_INT_TRIGGER(ID) {
     asm { INT #ID }
 }
+
+/* Nesting depth for ML_INT_ENTER/EXIT_CRITICAL_SECTION, only the outermost pair actually
+   touches interrupts, so a critical section can safely call into another one. */
+var u8 ml_int_critical_depth;
+
+/* Brackets a sequence that must not run with an interrupt landing in the middle of it */
+macro ML_INT_ENTER_CRITICAL_SECTION() {
+    if ml_int_critical_depth == 0 {
+        asm { CLI }
+    }
+    incr ml_int_critical_depth;
+}
+
+macro ML_INT_EXIT_CRITICAL_SECTION() {
+    decr ml_int_critical_depth;
+    if ml_int_critical_depth == 0 {
+        asm { STI }
+    }
+}

@@ -1,4 +1,5 @@
 *.bin
 *.mlvs
+storage.img
 !examples
 __pycache__
