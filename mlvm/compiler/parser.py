@@ -911,7 +911,7 @@ class Parser:
         if type_ in self.symbols.structs:
             self.syntax_error(f"{what} is a struct; access one of its fields instead!")
         if is_block_type(type_):
-            self.syntax_error(f"{what} is an array; index it with <...> to get a single element!")
+            self.syntax_error(f"{what} is an array; index it with (...) to get a single element!")
 
     def _split_dotted(self, token):
         # "a.b.c" -> ("a", ["b","c"]); ".b.c" -> (None, ["b","c"]); "a" -> ("a", [])
@@ -919,21 +919,22 @@ class Parser:
         return (parts[0] if parts[0] != "" else None), parts[1:]
 
     def parse_chain_steps(self):
-        # Consumes a run of <index> / .field steps from the token stream
+        # Consumes a run of (index) / .field steps from the token stream.
         steps = []
         while True:
-            if self.peek() == "<":
+            if self.peek() == "(":
                 self.advance()
                 index_tokens = []
-                depth = 0
-                while not (depth == 0 and self.peek() == ">"):
+                depth = 1
+                while True:
                     tok = self.advance()
                     if tok == "(":
                         depth += 1
                     elif tok == ")":
                         depth -= 1
+                        if depth == 0:
+                            break
                     index_tokens.append(tok)
-                self.advance()  # '>'
                 if len(index_tokens) == 0:
                     self.syntax_error("Malformed array index!")
                 steps.append(("index", self.make_expr(index_tokens)))
@@ -951,24 +952,22 @@ class Parser:
         steps = []
         while i < len(expression):
             token = expression[i]
-            if token == "<":
-                depth = 0
+            if token == "(":
+                depth = 1
                 j = i + 1
-                while j < len(expression):
+                while j < len(expression) and depth > 0:
                     if expression[j] == "(":
                         depth += 1
                     elif expression[j] == ")":
                         depth -= 1
-                    elif expression[j] == ">" and depth == 0:
-                        break
                     j += 1
-                if j >= len(expression):
-                    self.syntax_error("Malformed array index: missing >!")
-                index_tokens = expression[i + 1 : j]
+                if depth != 0:
+                    self.syntax_error("Malformed array index: missing )!")
+                index_tokens = expression[i + 1 : j - 1]
                 if len(index_tokens) == 0:
                     self.syntax_error("Malformed array index!")
                 steps.append(("index", self.make_expr(index_tokens)))
-                i = j + 1
+                i = j
                 continue
             if str(token).startswith("."):
                 _, fields = self._split_dotted(token)
@@ -1031,7 +1030,7 @@ class Parser:
                         self.syntax_error("Malformed pointer dereference: missing expression after type!")
 
                 starts_chain = j < len(expression) and str(expression[j]).startswith(".")
-                if starts_chain:  # [ptr].field...<index>... struct pointer field/array chain
+                if starts_chain:  # [ptr].field...(index)... struct pointer field/array chain
                     if explicit_type is not None:
                         self.syntax_error("Cannot combine an explicit type with .field access!")
                     if len(inner) != 1:
@@ -1049,36 +1048,22 @@ class Parser:
                 i = j
                 continue
 
-            if token == "<":
+            if token == "(":
+                # A bare name directly followed by "(" is always an index open, never a fn call
+                # "?fn(args)" calls are recognized and fully consumed by their leading "?" below
+                # before a bare name ever reaches this check, so there's nothing to disambiguate.
                 is_index = (
                     i > 0 and re.match(SYMBOL_RE, expression[i - 1]) and len(output) and output[-1] == expression[i - 1]
                 )
 
                 if is_index:
-                    depth = 0
-                    j = i + 1
-                    close = None
-                    while j < len(expression):
-                        if expression[j] == "(":
-                            depth += 1
-                        elif expression[j] == ")":
-                            depth -= 1
-                        elif expression[j] == ">" and depth == 0:
-                            close = j
-                            break
-                        j += 1
-
-                    starts_chain = (
-                        close is not None and close + 1 < len(expression) and str(expression[close + 1]).startswith(".")
-                    )
-                    if starts_chain:
-                        base_name = str(output.pop())
-                        steps, next_i = self._parse_chain_steps_list(expression, i)
-                        final_type = self.resolve_chain_type(base_name, False, steps)
-                        self.check_value_type(final_type, base_name)
-                        output.append(("path", base_name, False, steps, final_type))
-                        i = next_i
-                        continue
+                    base_name = str(output.pop())
+                    steps, next_i = self._parse_chain_steps_list(expression, i)
+                    final_type = self.resolve_chain_type(base_name, False, steps)
+                    self.check_value_type(final_type, base_name)
+                    output.append(("path", base_name, False, steps, final_type))
+                    i = next_i
+                    continue
 
             if token == "?":  # ?fn_name(arg1, arg2), a function call usable as an operand
                 if i + 1 >= len(expression) or not re.match(SYMBOL_RE, expression[i + 1]):
@@ -1119,10 +1104,14 @@ class Parser:
                 i = j + 1
                 continue
 
-            if "." in token and re.match(SYMBOL_RE, token):  # name.field...<index>..., a struct var chain
+            if "." in token and re.match(SYMBOL_RE, token):  # name.field...(index)..., a struct var chain
                 base_name, leading_fields = self._split_dotted(token)
                 leading_steps = [("field", f) for f in leading_fields]
-                more_steps, next_i = self._parse_chain_steps_list(expression, i + 1)
+
+                more_steps, next_i = [], i + 1
+                if next_i < len(expression) and str(expression[next_i])[:1] in (".", "("):
+                    more_steps, next_i = self._parse_chain_steps_list(expression, next_i)
+
                 steps = leading_steps + more_steps
                 final_type = self.resolve_chain_type(base_name, False, steps)
                 self.check_value_type(final_type, base_name)

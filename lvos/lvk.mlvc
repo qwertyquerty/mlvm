@@ -1,4 +1,5 @@
 include mlib/time.mlvc;
+include lvfs/lvfs.mlvc;
 
 define LVK_MAX_PROCESSES 8;
 define LVK_STACK_SLICE_SIZE 256;
@@ -36,7 +37,7 @@ fn _lvk_find_empty_proc {
     set i = 0;
 
     while i < #LVK_MAX_PROCESSES {
-        if lvk_process_table<i>.status == #LVK_PROC_STAT_NONE {
+        if lvk_process_table(i).status == #LVK_PROC_STAT_NONE {
             return i;
         }
 
@@ -67,17 +68,17 @@ fn lvk_spawn(u16 entry_addr) {
     set [u8 @lvk_frames + frame_base + 10] = 0; /* S */
     set [u16 @lvk_frames + frame_base + 11] = slot * #LVK_STACK_SLICE_SIZE; /* T: this slot's stack slice */
 
-    set lvk_process_table<slot>.status = #LVK_PROC_STAT_RUNNING;
-    set lvk_process_table<slot>.sleep_ticks = 0;
-    set lvk_process_table<slot>.entrypoint = entry_addr;
-    set lvk_process_table<slot>.run_count = 0;
+    set lvk_process_table(slot).status = #LVK_PROC_STAT_RUNNING;
+    set lvk_process_table(slot).sleep_ticks = 0;
+    set lvk_process_table(slot).entrypoint = entry_addr;
+    set lvk_process_table(slot).run_count = 0;
 
     return slot;
 }
 
 /* Ends the current process. Marks its slot free and spins until the scheduler switches away. */
 fn lvk_exit {
-    set lvk_process_table<lvk_cur_process>.status = #LVK_PROC_STAT_NONE;
+    set lvk_process_table(lvk_cur_process).status = #LVK_PROC_STAT_NONE;
     while 1 {
     }
 }
@@ -89,19 +90,19 @@ fn lvk_sleep(u16 ms) {
 
     set me = lvk_cur_process;
 
-    if lvk_process_table<me>.status == #LVK_PROC_STAT_NONE {
+    if lvk_process_table(me).status == #LVK_PROC_STAT_NONE {
         call lvk_exit;
     }
 
-    set lvk_process_table<me>.sleep_ticks = (ms / #LVK_TICK_MS) + 1;
-    set lvk_process_table<me>.status = #LVK_PROC_STAT_SLEEPING;
+    set lvk_process_table(me).sleep_ticks = (ms / #LVK_TICK_MS) + 1;
+    set lvk_process_table(me).status = #LVK_PROC_STAT_SLEEPING;
 
     #ML_INT_TRIGGER(#LVK_YIELD_IRQ_ID);
 
-    while lvk_process_table<me>.status == #LVK_PROC_STAT_SLEEPING {
+    while lvk_process_table(me).status == #LVK_PROC_STAT_SLEEPING {
     }
 
-    if lvk_process_table<me>.status == #LVK_PROC_STAT_NONE {
+    if lvk_process_table(me).status == #LVK_PROC_STAT_NONE {
         call lvk_exit;
     }
 }
@@ -109,7 +110,7 @@ fn lvk_sleep(u16 ms) {
 
 /* Gives up the rest of the current process's tick immediately. */
 fn lvk_yield {
-    if lvk_process_table<lvk_cur_process>.status == #LVK_PROC_STAT_NONE {
+    if lvk_process_table(lvk_cur_process).status == #LVK_PROC_STAT_NONE {
         call lvk_exit;
     }
 
@@ -131,7 +132,7 @@ fn lvk_do_switch {
 
     /* slot 0 is always kept running */
     set next = (lvk_cur_process + 1) % #LVK_MAX_PROCESSES;
-    while lvk_process_table<next>.status != #LVK_PROC_STAT_RUNNING {
+    while lvk_process_table(next).status != #LVK_PROC_STAT_RUNNING {
         set next = (next + 1) % #LVK_MAX_PROCESSES;
     }
 
@@ -140,7 +141,7 @@ fn lvk_do_switch {
     ldi fp16;
 
     set lvk_cur_process = next;
-    set lvk_process_table<next>.run_count = lvk_process_table<next>.run_count + 1;
+    set lvk_process_table(next).run_count = lvk_process_table(next).run_count + 1;
 }
 
 /* Timer IRQ handler. Fires every LVK_TICK_MS. Counts down sleeping processes, wakes any that hit
@@ -152,10 +153,10 @@ fn lvk_timer_isr {
 
     set i = 0;
     while i < #LVK_MAX_PROCESSES {
-        if lvk_process_table<i>.status == #LVK_PROC_STAT_SLEEPING {
-            set lvk_process_table<i>.sleep_ticks = lvk_process_table<i>.sleep_ticks - 1;
-            if lvk_process_table<i>.sleep_ticks == 0 {
-                set lvk_process_table<i>.status = #LVK_PROC_STAT_RUNNING;
+        if lvk_process_table(i).status == #LVK_PROC_STAT_SLEEPING {
+            set lvk_process_table(i).sleep_ticks = lvk_process_table(i).sleep_ticks - 1;
+            if lvk_process_table(i).sleep_ticks == 0 {
+                set lvk_process_table(i).status = #LVK_PROC_STAT_RUNNING;
             }
         }
         incr i;
@@ -181,17 +182,67 @@ fn lvk_kill(u8 slot) {
         return;
     }
 
-    set lvk_process_table<slot>.status = #LVK_PROC_STAT_NONE;
+    set lvk_process_table(slot).status = #LVK_PROC_STAT_NONE;
 
     if slot == lvk_cur_process {
         call lvk_exit;
     }
 }
 
+define LVK_MAX_FDS 8;
+
+struct lvk_fd_t {
+    u16 inode;
+    u16 position;
+    u8 in_use;
+};
+
+array lvk_fd_t #LVK_MAX_FDS lvk_fd_table;
+
+/* Opens inode at position 0. Returns a descriptor, or 255 if the table is full. */
+fn lvk_fd_open(u16 inode) {
+    var u8 i;
+
+    set i = 0;
+    while i < #LVK_MAX_FDS {
+        if lvk_fd_table(i).in_use == 0 {
+            set lvk_fd_table(i).inode = inode;
+            set lvk_fd_table(i).position = 0;
+            set lvk_fd_table(i).in_use = 1;
+            return i;
+        }
+        incr i;
+    }
+    return 255;
+}
+
+/* Frees fd for reuse. */
+fn lvk_fd_close(u8 fd) {
+    set lvk_fd_table(fd).in_use = 0;
+}
+
+/* Reads up to len bytes from fd into dst, advancing its position. Returns bytes read. */
+fn lvk_fd_read(u8 fd, [u8] dst, u16 len) {
+    var u16 n;
+
+    set n = ?lvfs_read(lvk_fd_table(fd).inode, lvk_fd_table(fd).position, dst, len);
+    set lvk_fd_table(fd).position = lvk_fd_table(fd).position + n;
+    return n;
+}
+
+/* Writes len bytes from src to fd, advancing its position. Returns bytes written. */
+fn lvk_fd_write(u8 fd, [u8] src, u16 len) {
+    var u16 n;
+
+    set n = ?lvfs_write(lvk_fd_table(fd).inode, lvk_fd_table(fd).position, src, len);
+    set lvk_fd_table(fd).position = lvk_fd_table(fd).position + n;
+    return n;
+}
+
 /* Sets up the scheduler: marks the caller as process 0, arms the tick timer, installs the yield
    IRQ handler. Call once at boot, before spawning any other process. */
 fn lvk_init() {
-    set lvk_process_table<0>.status = #LVK_PROC_STAT_RUNNING;
+    set lvk_process_table(0).status = #LVK_PROC_STAT_RUNNING;
     set lvk_cur_process = 0;
 
     #ML_TIME_REGISTER_IRQ1(@lvk_timer_isr, #LVK_TICK_MS);

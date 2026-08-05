@@ -1,0 +1,639 @@
+/* LVFS: A tiny filesystem */
+
+include mlib/storage.mlvc;
+include mlib/memory.mlvc;
+include mlib/string.mlvc;
+include mlib/interrupt.mlvc;
+
+define LVFS_BLOCK_SIZE 256;
+define LVFS_BLOCK_COUNT 65536;
+define LVFS_INODE_SIZE 9;
+define LVFS_INODE_COUNT 32768;
+define LVFS_NAME_LENGTH 16;
+define LVFS_INDIRECT_COUNT 2;
+define LVFS_POINTERS_PER_BLOCK 128;
+define LVFS_BITS_PER_BLOCK 2048;
+
+define LVFS_SUPERBLOCK_BLOCK 1;
+define LVFS_BLOCK_BITMAP_START 2;
+define LVFS_BLOCK_BITMAP_BLOCKS 32;
+define LVFS_INODE_BITMAP_START 34;
+define LVFS_INODE_BITMAP_BLOCKS 16;
+define LVFS_INODE_TABLE_START 50;
+define LVFS_INODES_PER_BLOCK 28;
+define LVFS_DATA_START 1221;
+
+define LVFS_MAGIC 0x5446;
+define LVFS_VERSION 1;
+
+define LVFS_TYPE_UNUSED 0;
+define LVFS_TYPE_FILE 1;
+define LVFS_TYPE_DIR 2;
+
+define LVFS_ROOT_INODE 1;
+
+define LVFS_DIRENT_SIZE 32;
+define LVFS_DIRENT_INODE 16;
+define LVFS_DIRENTS_PER_BLOCK 8;
+
+struct lvfs_superblock_t {
+    u16 magic;
+    u16 version;
+    u16 free_blocks;
+    u16 free_inodes;
+};
+
+struct lvfs_inode_t {
+    u8 type;
+    u16 size;
+    u16 parent;
+    array u16 #LVFS_INDIRECT_COUNT indirect;
+};
+
+var u16 lvfs_free_blocks lvfs_free_inodes;
+
+array u8 256 lvfs_block_buf;
+var [lvfs_superblock_t] lvfs_sb;
+var lvfs_inode_t lvfs_inode_buf;
+array u8 16 lvfs_name_buf;
+array u8 16 lvfs_query_name_buf;
+array u8 17 lvfs_component_buf;
+
+
+fn lvfs_bitmap_write_bit(u16 bitmap_start, u16 index, u8 bit) {
+    var u16 block_num;
+    var u8 byte_off bit_off byte_val;
+
+    set block_num = bitmap_start + (index / #LVFS_BITS_PER_BLOCK);
+    set byte_off = (index / 8) % #LVFS_BLOCK_SIZE;
+    set bit_off = index % 8;
+
+    #ML_INT_ENTER_CRITICAL_SECTION();
+    #ML_STORAGE_SELECT_BLOCK(block_num);
+    #ML_STORAGE_SEEK(byte_off);
+    set byte_val = #ML_STORAGE_READ_BYTE();
+
+    if bit == 1 {
+        set byte_val = byte_val | (1 << bit_off);
+    } else {
+        set byte_val = byte_val & (~(1 << bit_off));
+    }
+
+    #ML_STORAGE_WRITE_BYTE(byte_val);
+    #ML_INT_EXIT_CRITICAL_SECTION();
+}
+
+fn lvfs_bitmap_find_free(u16 bitmap_start, u16 block_count) {
+    var u16 block_i byte_i;
+    var u8 byte_val bit_i;
+
+    set block_i = 0;
+    while block_i < block_count {
+        call ml_storage_read_block(bitmap_start + block_i, @lvfs_block_buf);
+
+        set byte_i = 0;
+        while byte_i < #LVFS_BLOCK_SIZE {
+            set byte_val = [u8 @lvfs_block_buf + byte_i];
+            if byte_val != 0xFF {
+                set bit_i = 0;
+                while bit_i < 8 {
+                    if ((byte_val >> bit_i) & 1) == 0 {
+                        return block_i * #LVFS_BITS_PER_BLOCK + byte_i * 8 + bit_i;
+                    }
+                    incr bit_i;
+                }
+            }
+            incr byte_i;
+        }
+        incr block_i;
+    }
+    return 0xFFFF;
+}
+
+
+fn lvfs_read_inode(u16 num) {
+    var u16 block_num;
+    var u8 offset;
+
+    set block_num = #LVFS_INODE_TABLE_START + (num / #LVFS_INODES_PER_BLOCK);
+    set offset = (num % #LVFS_INODES_PER_BLOCK) * #LVFS_INODE_SIZE;
+    call ml_storage_read_bytes(block_num, offset, @lvfs_inode_buf, #LVFS_INODE_SIZE);
+}
+
+fn lvfs_write_inode(u16 num) {
+    var u16 block_num;
+    var u8 offset;
+
+    set block_num = #LVFS_INODE_TABLE_START + (num / #LVFS_INODES_PER_BLOCK);
+    set offset = (num % #LVFS_INODES_PER_BLOCK) * #LVFS_INODE_SIZE;
+    call ml_storage_write_bytes(block_num, offset, @lvfs_inode_buf, #LVFS_INODE_SIZE);
+}
+
+fn lvfs_inode_block_count {
+    var u16 size blocks;
+
+    set size = lvfs_inode_buf.size;
+    set blocks = size / #LVFS_BLOCK_SIZE;
+    if (size % #LVFS_BLOCK_SIZE) != 0 {
+        set blocks = blocks + 1;
+    }
+    return blocks;
+}
+
+fn lvfs_inode_grow(u16 new_size) {
+    if new_size > lvfs_inode_buf.size {
+        set lvfs_inode_buf.size = new_size;
+    }
+}
+
+
+fn lvfs_alloc(u16 bitmap_start, u16 block_count, [u16] counter) {
+    var u16 index;
+
+    set index = ?lvfs_bitmap_find_free(bitmap_start, block_count);
+    if index == 0xFFFF {
+        return 0;
+    }
+    call lvfs_bitmap_write_bit(bitmap_start, index, 1);
+    set [counter] = [counter] - 1;
+    return index;
+}
+
+fn lvfs_alloc_block {
+    return ?lvfs_alloc(#LVFS_BLOCK_BITMAP_START, #LVFS_BLOCK_BITMAP_BLOCKS, @lvfs_free_blocks);
+}
+
+fn lvfs_alloc_inode {
+    return ?lvfs_alloc(#LVFS_INODE_BITMAP_START, #LVFS_INODE_BITMAP_BLOCKS, @lvfs_free_inodes);
+}
+
+fn lvfs_free_block(u16 num) {
+    call lvfs_bitmap_write_bit(#LVFS_BLOCK_BITMAP_START, num, 0);
+    set lvfs_free_blocks = lvfs_free_blocks + 1;
+}
+
+fn lvfs_free_inode(u16 num) {
+    call lvfs_bitmap_write_bit(#LVFS_INODE_BITMAP_START, num, 0);
+    set lvfs_free_inodes = lvfs_free_inodes + 1;
+}
+
+
+fn lvfs_resolve_block(u16 block_index) {
+    var u16 indirect_idx indirect_block;
+    var u8 entry_idx;
+
+    set indirect_idx = block_index / #LVFS_POINTERS_PER_BLOCK;
+    set entry_idx = block_index % #LVFS_POINTERS_PER_BLOCK;
+
+    set indirect_block = lvfs_inode_buf.indirect(indirect_idx);
+    if indirect_block == 0 {
+        return 0;
+    }
+
+    return ?ml_storage_read_u16(indirect_block, entry_idx * 2);
+}
+
+fn lvfs_ensure_block(u16 block_index) {
+    var u16 indirect_idx indirect_block data_block;
+    var u8 entry_idx fresh_indirect;
+
+    set indirect_idx = block_index / #LVFS_POINTERS_PER_BLOCK;
+    set entry_idx = block_index % #LVFS_POINTERS_PER_BLOCK;
+    set fresh_indirect = 0;
+
+    set indirect_block = lvfs_inode_buf.indirect(indirect_idx);
+    if indirect_block == 0 {
+        set indirect_block = ?lvfs_alloc_block();
+        if indirect_block == 0 {
+            return 0;
+        }
+        call ml_storage_zero_block(indirect_block);
+        set lvfs_inode_buf.indirect(indirect_idx) = indirect_block;
+        set fresh_indirect = 1;
+    }
+
+    if fresh_indirect == 1 {
+        set data_block = 0;
+    } else {
+        set data_block = ?ml_storage_read_u16(indirect_block, entry_idx * 2);
+    }
+    if data_block == 0 {
+        set data_block = ?lvfs_alloc_block();
+        if data_block == 0 {
+            return 0;
+        }
+        call ml_storage_zero_block(data_block);
+        call ml_storage_write_u16(indirect_block, entry_idx * 2, data_block);
+    }
+
+    return data_block;
+}
+
+
+fn lvfs_read(u16 num, u16 offset, [u8] dst, u16 len) {
+    var u16 block_index remaining file_blocks data_block chunk total available;
+    var u8 in_block_offset;
+
+    call lvfs_read_inode(num);
+
+    if offset >= lvfs_inode_buf.size {
+        return 0;
+    }
+    set available = lvfs_inode_buf.size - offset;
+    if len > available {
+        set len = available;
+    }
+
+    set file_blocks = ?lvfs_inode_block_count();
+
+    set block_index = offset / #LVFS_BLOCK_SIZE;
+    set in_block_offset = offset % #LVFS_BLOCK_SIZE;
+    set remaining = len;
+    set total = 0;
+
+    while remaining > 0 {
+        if block_index >= file_blocks {
+            return total;
+        }
+
+        set data_block = ?lvfs_resolve_block(block_index);
+
+        set chunk = #LVFS_BLOCK_SIZE - in_block_offset;
+        if chunk > remaining {
+            set chunk = remaining;
+        }
+
+        if data_block == 0 {
+            call ml_mem_set(dst, 0, chunk);
+        } else if chunk == #LVFS_BLOCK_SIZE {
+            call ml_storage_read_block(data_block, dst);
+        } else {
+            call ml_storage_read_bytes(data_block, in_block_offset, dst, chunk);
+        }
+
+        set dst = dst + chunk;
+        set remaining = remaining - chunk;
+        set total = total + chunk;
+        set in_block_offset = 0;
+        incr block_index;
+    }
+
+    return total;
+}
+
+
+fn lvfs_write(u16 num, u16 offset, [u8] src, u16 len) {
+    var u16 block_index remaining data_block chunk total;
+    var u8 in_block_offset;
+
+    call lvfs_read_inode(num);
+
+    set block_index = offset / #LVFS_BLOCK_SIZE;
+    set in_block_offset = offset % #LVFS_BLOCK_SIZE;
+    set remaining = len;
+    set total = 0;
+
+    while remaining > 0 {
+        set data_block = ?lvfs_ensure_block(block_index);
+        if data_block == 0 {
+            set remaining = 0;
+        } else {
+            set chunk = #LVFS_BLOCK_SIZE - in_block_offset;
+            if chunk > remaining {
+                set chunk = remaining;
+            }
+
+            if chunk == #LVFS_BLOCK_SIZE {
+                call ml_storage_write_block(data_block, src);
+            } else {
+                call ml_storage_write_bytes(data_block, in_block_offset, src, chunk);
+            }
+
+            set src = src + chunk;
+            set remaining = remaining - chunk;
+            set total = total + chunk;
+            set in_block_offset = 0;
+            incr block_index;
+        }
+    }
+
+    call lvfs_inode_grow(offset + total);
+    call lvfs_write_inode(num);
+
+    return total;
+}
+
+fn lvfs_write_dirent(u16 data_block, u16 entry_offset, [u8] name, u16 child_inode) {
+    call ml_str_copy_fixed(@lvfs_name_buf, name, #LVFS_NAME_LENGTH);
+    call ml_storage_write_bytes(data_block, entry_offset, @lvfs_name_buf, #LVFS_NAME_LENGTH);
+    call ml_storage_write_u16(data_block, entry_offset + #LVFS_DIRENT_INODE, child_inode);
+}
+
+fn lvfs_dir_locate(u16 dir_num, [u8] name, [u16] out_block, [u16] out_offset) {
+    var u16 file_blocks block_i data_block entry_offset existing_inode;
+    var u8 entry_i;
+
+    call ml_str_copy_fixed(@lvfs_query_name_buf, name, #LVFS_NAME_LENGTH);
+
+    call lvfs_read_inode(dir_num);
+    set file_blocks = ?lvfs_inode_block_count();
+
+    set block_i = 0;
+    while block_i < file_blocks {
+        set data_block = ?lvfs_resolve_block(block_i);
+        if data_block != 0 {
+            set entry_i = 0;
+            while entry_i < #LVFS_DIRENTS_PER_BLOCK {
+                set entry_offset = entry_i * #LVFS_DIRENT_SIZE;
+                set existing_inode = ?ml_storage_read_u16(data_block, entry_offset + #LVFS_DIRENT_INODE);
+                if existing_inode != 0 {
+                    call ml_storage_read_bytes(data_block, entry_offset, @lvfs_name_buf, #LVFS_NAME_LENGTH);
+                    if ?ml_mem_equal(@lvfs_name_buf, @lvfs_query_name_buf, #LVFS_NAME_LENGTH) {
+                        set [out_block] = data_block;
+                        set [out_offset] = entry_offset;
+                        return 1;
+                    }
+                }
+                incr entry_i;
+            }
+        }
+        incr block_i;
+    }
+    return 0;
+}
+
+fn lvfs_dir_find(u16 dir_num, [u8] name) {
+    var u16 block offset;
+
+    if ?lvfs_dir_locate(dir_num, name, @block, @offset) == 0 {
+        return 0;
+    }
+    return ?ml_storage_read_u16(block, offset + #LVFS_DIRENT_INODE);
+}
+
+fn lvfs_dir_entry_count(u16 dir_num) {
+    call lvfs_read_inode(dir_num);
+    return ?lvfs_inode_block_count() * #LVFS_DIRENTS_PER_BLOCK;
+}
+
+fn lvfs_dir_read_entry(u16 dir_num, u16 index, [u8] name_out) {
+    var u16 file_blocks data_block entry_offset inode_num;
+    var u8 entry_i;
+
+    call lvfs_read_inode(dir_num);
+    set file_blocks = ?lvfs_inode_block_count();
+
+    set entry_i = index % #LVFS_DIRENTS_PER_BLOCK;
+
+    if (index / #LVFS_DIRENTS_PER_BLOCK) >= file_blocks {
+        return 0;
+    }
+
+    set data_block = ?lvfs_resolve_block(index / #LVFS_DIRENTS_PER_BLOCK);
+    if data_block == 0 {
+        return 0;
+    }
+
+    set entry_offset = entry_i * #LVFS_DIRENT_SIZE;
+    set inode_num = ?ml_storage_read_u16(data_block, entry_offset + #LVFS_DIRENT_INODE);
+    if inode_num != 0 {
+        call ml_storage_read_bytes(data_block, entry_offset, name_out, #LVFS_NAME_LENGTH);
+    }
+
+    return inode_num;
+}
+
+fn lvfs_dir_add_entry(u16 dir_num, [u8] name, u16 child_inode) {
+    var u16 file_blocks block_i data_block entry_offset existing_inode;
+    var u8 entry_i;
+
+    call lvfs_read_inode(dir_num);
+    set file_blocks = ?lvfs_inode_block_count();
+
+    set block_i = 0;
+    while block_i < file_blocks {
+        set data_block = ?lvfs_resolve_block(block_i);
+        if data_block != 0 {
+            set entry_i = 0;
+            while entry_i < #LVFS_DIRENTS_PER_BLOCK {
+                set entry_offset = entry_i * #LVFS_DIRENT_SIZE;
+                set existing_inode = ?ml_storage_read_u16(data_block, entry_offset + #LVFS_DIRENT_INODE);
+                if existing_inode == 0 {
+                    call lvfs_write_dirent(data_block, entry_offset, name, child_inode);
+                    return 1;
+                }
+                incr entry_i;
+            }
+        }
+        incr block_i;
+    }
+
+    set data_block = ?lvfs_ensure_block(file_blocks);
+    if data_block == 0 {
+        return 0;
+    }
+    call lvfs_write_dirent(data_block, 0, name, child_inode);
+
+    call lvfs_inode_grow(file_blocks * #LVFS_BLOCK_SIZE + 1);
+    call lvfs_write_inode(dir_num);
+    return 1;
+}
+
+fn lvfs_dir_remove_entry(u16 dir_num, [u8] name) {
+    var u16 block offset;
+
+    if ?lvfs_dir_locate(dir_num, name, @block, @offset) == 1 {
+        call ml_storage_write_u16(block, offset + #LVFS_DIRENT_INODE, 0);
+    }
+}
+
+fn lvfs_resolve_path(u16 start_inode, [u8] path) {
+    var u16 cur i;
+    var u8 c;
+
+    if [path] == '/' {
+        set cur = #LVFS_ROOT_INODE;
+        incr path;
+    } else {
+        set cur = start_inode;
+    }
+
+    while [path] != 0 {
+        set i = 0;
+        set c = [path];
+        while (c != 0) && (c != '/') {
+            if i < #LVFS_NAME_LENGTH {
+                set [u8 @lvfs_component_buf + i] = c;
+                incr i;
+            }
+            incr path;
+            set c = [path];
+        }
+        set [u8 @lvfs_component_buf + i] = 0;
+
+        set cur = ?lvfs_dir_find(cur, @lvfs_component_buf);
+        if cur == 0 {
+            return 0;
+        }
+
+        if [path] == '/' {
+            incr path;
+        }
+    }
+
+    return cur;
+}
+
+fn lvfs_name_valid([u8] name) {
+    var u8 c ok;
+
+    if [name] == 0 {
+        return 0;
+    }
+
+    while [name] != 0 {
+        set c = [name];
+        set ok = 0;
+        if (c >= '0') && (c <= '9') { set ok = 1; }
+        if (c >= 'A') && (c <= 'Z') { set ok = 1; }
+        if (c >= 'a') && (c <= 'z') { set ok = 1; }
+        if c == '.' { set ok = 1; }
+        if ok == 0 {
+            return 0;
+        }
+        incr name;
+    }
+    return 1;
+}
+
+fn lvfs_create(u16 parent_num, [u8] name, u8 type) {
+    var u16 new_inode;
+
+    if ?ml_str_len(name) > #LVFS_NAME_LENGTH {
+        return 0;
+    }
+    if ?lvfs_name_valid(name) == 0 {
+        return 0;
+    }
+    if ?lvfs_dir_find(parent_num, name) != 0 {
+        return 0;
+    }
+
+    set new_inode = ?lvfs_alloc_inode();
+    if new_inode == 0 {
+        return 0;
+    }
+
+    call ml_mem_set(@lvfs_inode_buf, 0, #LVFS_INODE_SIZE);
+    set lvfs_inode_buf.type = type;
+    set lvfs_inode_buf.parent = parent_num;
+    call lvfs_write_inode(new_inode);
+
+    if ?lvfs_dir_add_entry(parent_num, name, new_inode) == 0 {
+        call lvfs_free_inode(new_inode);
+        return 0;
+    }
+
+    return new_inode;
+}
+
+fn lvfs_delete(u16 parent_num, [u8] name) {
+    var u16 target_inode file_blocks block_i data_block indirect_block;
+    var u8 indirect_i;
+
+    set target_inode = ?lvfs_dir_find(parent_num, name);
+    if target_inode == 0 {
+        return 0;
+    }
+
+    call lvfs_read_inode(target_inode);
+    set file_blocks = ?lvfs_inode_block_count();
+
+    set indirect_i = 0;
+    while indirect_i < #LVFS_INDIRECT_COUNT {
+        set indirect_block = lvfs_inode_buf.indirect(indirect_i);
+        if indirect_block != 0 {
+            set block_i = 0;
+            while block_i < #LVFS_POINTERS_PER_BLOCK {
+                set data_block = ?ml_storage_read_u16(indirect_block, block_i * 2);
+                if data_block != 0 {
+                    call lvfs_free_block(data_block);
+                }
+                incr block_i;
+            }
+            call lvfs_free_block(indirect_block);
+        }
+        incr indirect_i;
+    }
+
+    call lvfs_free_inode(target_inode);
+    call lvfs_dir_remove_entry(parent_num, name);
+    return 1;
+}
+
+fn lvfs_format {
+    var u16 i;
+
+    call ml_mem_set(@lvfs_block_buf, 0, #LVFS_BLOCK_SIZE);
+    set lvfs_sb = @lvfs_block_buf;
+    set [lvfs_sb].magic = #LVFS_MAGIC;
+    set [lvfs_sb].version = #LVFS_VERSION;
+    set [lvfs_sb].free_blocks = #LVFS_BLOCK_COUNT - #LVFS_DATA_START;
+    set [lvfs_sb].free_inodes = #LVFS_INODE_COUNT - 2;
+    call ml_storage_write_block(#LVFS_SUPERBLOCK_BLOCK, @lvfs_block_buf);
+
+    set i = 0;
+    while i < #LVFS_BLOCK_BITMAP_BLOCKS {
+        call ml_storage_zero_block(#LVFS_BLOCK_BITMAP_START + i);
+        incr i;
+    }
+    set i = 0;
+    while i < #LVFS_DATA_START {
+        call lvfs_bitmap_write_bit(#LVFS_BLOCK_BITMAP_START, i, 1);
+        incr i;
+    }
+
+    set i = 0;
+    while i < #LVFS_INODE_BITMAP_BLOCKS {
+        call ml_storage_zero_block(#LVFS_INODE_BITMAP_START + i);
+        incr i;
+    }
+    call lvfs_bitmap_write_bit(#LVFS_INODE_BITMAP_START, 0, 1);
+    call lvfs_bitmap_write_bit(#LVFS_INODE_BITMAP_START, #LVFS_ROOT_INODE, 1);
+
+    call ml_mem_set(@lvfs_inode_buf, 0, #LVFS_INODE_SIZE);
+    set lvfs_inode_buf.type = #LVFS_TYPE_DIR;
+    set lvfs_inode_buf.parent = 0;
+    call lvfs_write_inode(#LVFS_ROOT_INODE);
+
+    set lvfs_free_blocks = #LVFS_BLOCK_COUNT - #LVFS_DATA_START;
+    set lvfs_free_inodes = #LVFS_INODE_COUNT - 2;
+}
+
+fn lvfs_mount {
+    var u16 magic version;
+
+    call ml_storage_read_block(#LVFS_SUPERBLOCK_BLOCK, @lvfs_block_buf);
+    set lvfs_sb = @lvfs_block_buf;
+    set magic = [lvfs_sb].magic;
+    set version = [lvfs_sb].version;
+
+    if magic != #LVFS_MAGIC {
+        return 0;
+    }
+    if version != #LVFS_VERSION {
+        return 0;
+    }
+
+    set lvfs_free_blocks = [lvfs_sb].free_blocks;
+    set lvfs_free_inodes = [lvfs_sb].free_inodes;
+    return 1;
+}
+
+fn lvfs_sync {
+    call ml_storage_read_block(#LVFS_SUPERBLOCK_BLOCK, @lvfs_block_buf);
+    set lvfs_sb = @lvfs_block_buf;
+    set [lvfs_sb].free_blocks = lvfs_free_blocks;
+    set [lvfs_sb].free_inodes = lvfs_free_inodes;
+    call ml_storage_write_block(#LVFS_SUPERBLOCK_BLOCK, @lvfs_block_buf);
+}

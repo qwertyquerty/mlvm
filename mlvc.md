@@ -209,14 +209,16 @@ Field access through a struct pointer always uses `[pp].field`, never `pp.field`
 
 ```mlvc
 array point_t 4 points;
-set points<0>.x = 5;
-set points<counter>.y = 9;
+set points(0).x = 5;
+set points(counter).y = 9;
 ```
+
+`points(i)` is never confused with a function call, calls always start with `?` or `call`
 
 ### Array of structs, read
 
 ```mlvc
-set someval = points<0>.x;
+set someval = points(0).x;
 ```
 
 ### Array field
@@ -228,8 +230,8 @@ struct inode_t {
 };
 
 var inode_t node;
-set node.indirect<3> = 500;
-set someval = node.indirect<3>;
+set node.indirect(3) = 500;
+set someval = node.indirect(3);
 ```
 
 

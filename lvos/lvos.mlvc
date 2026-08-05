@@ -8,8 +8,11 @@ include mlib/keyboard.mlvc;
 include mlib/string.mlvc;
 include mlib/time.mlvc;
 include mlib/color.mlvc;
+include mlib/interrupt.mlvc;
+
 
 include lvos/lvk.mlvc;
+include lvfs/lvfs.mlvc;
 
 /* Animates a spinner character, one frame every delay ms. */
 fn spinner(u16 delay, u8 slot) {
@@ -28,25 +31,25 @@ fn spinner(u16 delay, u8 slot) {
     }
 }
 
-define LVOS_PS_COL 13;
-define LVOS_PS_HEADER_ROW 22;
-define LVOS_PS_ROW_START 23;
-data u8 ps_header "I   TCKS SLP  ENTR";
+define LVOS_PROCMON_COL 13;
+define LVOS_PROCMON_HEADER_ROW 22;
+define LVOS_PROCMON_ROW_START 23;
+data u8 procmon_header "I   TCKS SLP  ENTR";
 
-/* Draws a live process table */
-fn ps_monitor {
+/* Draws a live process table. Not started at boot - "spawn procmon" starts it on demand. */
+fn procmon {
     var u8 i;
     var u8 row;
     var u8 status;
     var u8 status_char;
 
-    call ml_term_print_at(#LVOS_PS_COL, #LVOS_PS_HEADER_ROW, @ps_header);
+    call ml_term_print_at(#LVOS_PROCMON_COL, #LVOS_PROCMON_HEADER_ROW, @procmon_header);
 
     while 1 {
         set i = 0;
-        set row = #LVOS_PS_ROW_START;
+        set row = #LVOS_PROCMON_ROW_START;
         while i < #LVK_MAX_PROCESSES {
-            set status = lvk_process_table<i>.status;
+            set status = lvk_process_table(i).status;
 
             set status_char = '?';
             if status == #LVK_PROC_STAT_NONE {
@@ -59,11 +62,11 @@ fn ps_monitor {
                 set status_char = 'S';
             }
 
-            call ml_term_put_char_at(#LVOS_PS_COL, row, i + 48);
-            call ml_term_put_char_at(#LVOS_PS_COL + 2, row, status_char);
-            call ml_term_print_hex_u16(#LVOS_PS_COL + 4, row, lvk_process_table<i>.run_count);
-            call ml_term_print_hex_u16(#LVOS_PS_COL + 9, row, lvk_process_table<i>.sleep_ticks);
-            call ml_term_print_hex_u16(#LVOS_PS_COL + 14, row, lvk_process_table<i>.entrypoint);
+            call ml_term_put_char_at(#LVOS_PROCMON_COL, row, i + 48);
+            call ml_term_put_char_at(#LVOS_PROCMON_COL + 2, row, status_char);
+            call ml_term_print_hex_u16(#LVOS_PROCMON_COL + 4, row, lvk_process_table(i).run_count);
+            call ml_term_print_hex_u16(#LVOS_PROCMON_COL + 9, row, lvk_process_table(i).sleep_ticks);
+            call ml_term_print_hex_u16(#LVOS_PROCMON_COL + 14, row, lvk_process_table(i).entrypoint);
 
             incr i;
             incr row;
@@ -76,14 +79,263 @@ define LVOS_ROW_PROMPT 3;
 define SHELL_LINE_MAX 29;
 array u8 30 shell_line_buf;
 var u8 shell_line_len;
-data u8 shell_prompt_prefix "> ";
 data u8 cmd_kill_prefix "kill ";
+
+
+var u16 lvos_cwd_inode;
+
+define LVOS_CWD_PATH_MAX 64;
+array u8 #LVOS_CWD_PATH_MAX lvos_cwd_path;
+
+define LVOS_OUTPUT_ROW_START 5;
+define LVOS_OUTPUT_ROW_COUNT 15;
+
+data u8 cmd_mkdir_prefix "mkdir ";
+data u8 cmd_touch_prefix "touch ";
+data u8 cmd_cat_prefix "cat ";
+data u8 cmd_cd_prefix "cd ";
+data u8 cmd_stat_prefix "stat ";
+data u8 cmd_rm_prefix "rm ";
+data u8 cmd_spawn_procmon "spawn procmon";
+data u8 cmd_ls "ls";
+data u8 cmd_tree "tree";
+data u8 cmd_dotdot "..";
+
+data u8 msg_not_found "not found";
+data u8 msg_create_failed "failed";
+data u8 msg_not_dir "not a directory";
+data u8 msg_type_dir "dir";
+data u8 msg_type_file "file";
+data u8 msg_stat_size "size:";
+data u8 msg_stat_inode "inode:";
+
+array u8 17 lvos_name_buf;
+array u8 32 lvos_cat_buf;
+
+
+fn shell_output_clear {
+    var u8 row;
+
+    set row = #LVOS_OUTPUT_ROW_START;
+    while row < (#LVOS_OUTPUT_ROW_START + #LVOS_OUTPUT_ROW_COUNT) {
+        call ml_term_clear_row(row);
+        incr row;
+    }
+    call ml_term_setpos(0, #LVOS_OUTPUT_ROW_START);
+}
+
+fn shell_cmd_ls {
+    var u16 count i inode;
+    var u8 row;
+
+    call shell_output_clear();
+
+    set count = ?lvfs_dir_entry_count(lvos_cwd_inode);
+    set row = #LVOS_OUTPUT_ROW_START;
+    set i = 0;
+    while (i < count) && (row < (#LVOS_OUTPUT_ROW_START + #LVOS_OUTPUT_ROW_COUNT)) {
+        set inode = ?lvfs_dir_read_entry(lvos_cwd_inode, i, @lvos_name_buf);
+        if inode != 0 {
+            set [u8 @lvos_name_buf + 16] = 0;
+            call lvfs_read_inode(inode);
+            if lvfs_inode_buf.type == #LVFS_TYPE_DIR {
+                call ml_term_put_char_at(0, row, '/');
+                call ml_term_print_at(1, row, @lvos_name_buf);
+            } else {
+                call ml_term_print_at(0, row, @lvos_name_buf);
+            }
+            incr row;
+        }
+        incr i;
+    }
+}
+
+var u8 lvos_tree_row;
+
+fn shell_tree_walk(u16 dir_inode, u8 depth) {
+    var u16 count i inode;
+    var u8 col;
+
+    set count = ?lvfs_dir_entry_count(dir_inode);
+    set i = 0;
+    while (i < count) && (lvos_tree_row < (#LVOS_OUTPUT_ROW_START + #LVOS_OUTPUT_ROW_COUNT)) {
+        set inode = ?lvfs_dir_read_entry(dir_inode, i, @lvos_name_buf);
+        if inode != 0 {
+            set [u8 @lvos_name_buf + 16] = 0;
+            call lvfs_read_inode(inode);
+
+            set col = depth * 2;
+            if lvfs_inode_buf.type == #LVFS_TYPE_DIR {
+                call ml_term_put_char_at(col, lvos_tree_row, '/');
+                call ml_term_print_at(col + 1, lvos_tree_row, @lvos_name_buf);
+                incr lvos_tree_row;
+                call shell_tree_walk(inode, depth + 1);
+            } else {
+                call ml_term_print_at(col, lvos_tree_row, @lvos_name_buf);
+                incr lvos_tree_row;
+            }
+        }
+        incr i;
+    }
+}
+
+fn shell_cmd_tree {
+    call shell_output_clear();
+    set lvos_tree_row = #LVOS_OUTPUT_ROW_START;
+    call ml_term_put_char_at(0, lvos_tree_row, '/');
+    incr lvos_tree_row;
+    call shell_tree_walk(#LVFS_ROOT_INODE, 1);
+}
+
+fn shell_cmd_mkdir([u8] name) {
+    call shell_output_clear();
+    if ?lvfs_create(lvos_cwd_inode, name, #LVFS_TYPE_DIR) == 0 {
+        call ml_term_print_at(0, #LVOS_OUTPUT_ROW_START, @msg_create_failed);
+    }
+}
+
+fn shell_cmd_touch([u8] name) {
+    call shell_output_clear();
+    if ?lvfs_create(lvos_cwd_inode, name, #LVFS_TYPE_FILE) == 0 {
+        call ml_term_print_at(0, #LVOS_OUTPUT_ROW_START, @msg_create_failed);
+    }
+}
+
+fn shell_cmd_rm([u8] name) {
+    call shell_output_clear();
+    if ?lvfs_delete(lvos_cwd_inode, name) == 0 {
+        call ml_term_print_at(0, #LVOS_OUTPUT_ROW_START, @msg_not_found);
+    }
+}
+
+fn shell_cmd_cat([u8] name) {
+    var u16 inode n i;
+    var u8 fd row col c;
+
+    call shell_output_clear();
+
+    set inode = ?lvfs_resolve_path(lvos_cwd_inode, name);
+    if inode == 0 {
+        call ml_term_print_at(0, #LVOS_OUTPUT_ROW_START, @msg_not_found);
+        return;
+    }
+
+    set fd = ?lvk_fd_open(inode);
+    set row = #LVOS_OUTPUT_ROW_START;
+    set col = 0;
+    set n = ?lvk_fd_read(fd, @lvos_cat_buf, #ML_TERM_WIDTH);
+
+    while n > 0 {
+        set i = 0;
+        while i < n {
+            if row < (#LVOS_OUTPUT_ROW_START + #LVOS_OUTPUT_ROW_COUNT) {
+                set c = [u8 @lvos_cat_buf + i];
+                call ml_term_put_char_at(col, row, c);
+                incr col;
+                if col == #ML_TERM_WIDTH {
+                    set col = 0;
+                    incr row;
+                }
+            }
+            incr i;
+        }
+        set n = ?lvk_fd_read(fd, @lvos_cat_buf, #ML_TERM_WIDTH);
+    }
+
+    call lvk_fd_close(fd);
+}
+
+fn lvos_cwd_path_pop {
+    var u8 len i last_slash;
+
+    set len = ?ml_str_len(@lvos_cwd_path);
+    set last_slash = 0;
+    set i = 1;
+    while i < len {
+        if [u8 @lvos_cwd_path + i] == '/' {
+            set last_slash = i;
+        }
+        incr i;
+    }
+
+    if last_slash == 0 {
+        set [u8 @lvos_cwd_path + 1] = 0;
+    } else {
+        set [u8 @lvos_cwd_path + last_slash] = 0;
+    }
+}
+
+fn shell_cmd_cd([u8] name) {
+    var u16 inode;
+    var u8 cur_len;
+
+    call shell_output_clear();
+
+    if ?ml_str_eq(name, @cmd_dotdot) {
+        call lvfs_read_inode(lvos_cwd_inode);
+        if lvfs_inode_buf.parent != 0 {
+            set lvos_cwd_inode = lvfs_inode_buf.parent;
+            call lvos_cwd_path_pop();
+        }
+        return;
+    }
+
+    set inode = ?lvfs_resolve_path(lvos_cwd_inode, name);
+    if inode == 0 {
+        call ml_term_print_at(0, #LVOS_OUTPUT_ROW_START, @msg_not_found);
+        return;
+    }
+
+    call lvfs_read_inode(inode);
+    if lvfs_inode_buf.type != #LVFS_TYPE_DIR {
+        call ml_term_print_at(0, #LVOS_OUTPUT_ROW_START, @msg_not_dir);
+        return;
+    }
+
+    set lvos_cwd_inode = inode;
+
+    if [name] == '/' {
+        call ml_str_copy(@lvos_cwd_path, name);
+    } else {
+        set cur_len = ?ml_str_len(@lvos_cwd_path);
+        if (cur_len + 1 + ?ml_str_len(name)) < #LVOS_CWD_PATH_MAX {
+            if cur_len > 1 {
+                set [u8 @lvos_cwd_path + cur_len] = '/';
+                incr cur_len;
+            }
+            call ml_str_copy(@lvos_cwd_path + cur_len, name);
+        }
+    }
+}
+
+fn shell_cmd_stat([u8] name) {
+    var u16 inode;
+
+    call shell_output_clear();
+
+    set inode = ?lvfs_resolve_path(lvos_cwd_inode, name);
+    if inode == 0 {
+        call ml_term_print_at(0, #LVOS_OUTPUT_ROW_START, @msg_not_found);
+        return;
+    }
+
+    call lvfs_read_inode(inode);
+    if lvfs_inode_buf.type == #LVFS_TYPE_DIR {
+        call ml_term_print_at(0, #LVOS_OUTPUT_ROW_START, @msg_type_dir);
+    } else {
+        call ml_term_print_at(0, #LVOS_OUTPUT_ROW_START, @msg_type_file);
+    }
+
+    call ml_term_print_at(0, #LVOS_OUTPUT_ROW_START + 1, @msg_stat_size);
+    call ml_term_print_hex_u16(5, #LVOS_OUTPUT_ROW_START + 1, lvfs_inode_buf.size);
+    call ml_term_print_at(0, #LVOS_OUTPUT_ROW_START + 2, @msg_stat_inode);
+    call ml_term_print_hex_u16(6, #LVOS_OUTPUT_ROW_START + 2, inode);
+}
 
 /* Runs the typed command in shell_line_buf, then clears the line. */
 fn shell_dispatch {
     var [u8] p;
     var u8 slot;
-    var u8 matched;
 
     set p = @shell_line_buf + shell_line_len;
     set [p] = 0; /* null terminate for string comparisons */
@@ -95,25 +347,48 @@ fn shell_dispatch {
         if slot < #LVK_MAX_PROCESSES {
             call lvk_kill(slot);
         }
+    } else if ?ml_str_eq(@shell_line_buf, @cmd_ls) {
+        call shell_cmd_ls();
+    } else if ?ml_str_eq(@shell_line_buf, @cmd_tree) {
+        call shell_cmd_tree();
+    } else if ?ml_str_eq(@shell_line_buf, @cmd_spawn_procmon) {
+        call lvk_spawn(@procmon);
+    } else if ?ml_str_starts_with(@shell_line_buf, @cmd_mkdir_prefix) {
+        call shell_cmd_mkdir(@shell_line_buf + 6);
+    } else if ?ml_str_starts_with(@shell_line_buf, @cmd_touch_prefix) {
+        call shell_cmd_touch(@shell_line_buf + 6);
+    } else if ?ml_str_starts_with(@shell_line_buf, @cmd_rm_prefix) {
+        call shell_cmd_rm(@shell_line_buf + 3);
+    } else if ?ml_str_starts_with(@shell_line_buf, @cmd_cat_prefix) {
+        call shell_cmd_cat(@shell_line_buf + 4);
+    } else if ?ml_str_starts_with(@shell_line_buf, @cmd_cd_prefix) {
+        call shell_cmd_cd(@shell_line_buf + 3);
+    } else if ?ml_str_starts_with(@shell_line_buf, @cmd_stat_prefix) {
+        call shell_cmd_stat(@shell_line_buf + 5);
     }
 
     set shell_line_len = 0;
 }
 
-/* Redraws the prompt row from shell_line_buf. */
+/* Redraws the prompt row: lvos_cwd_path, then "> ", then shell_line_buf. */
 fn shell_redraw_prompt {
-    var u8 i;
+    var u8 i pwd_len col;
     var [u8] p;
     var u8 c;
 
     call ml_term_clear_row(#LVOS_ROW_PROMPT);
-    call ml_term_print_at(0, #LVOS_ROW_PROMPT, @shell_prompt_prefix);
 
+    set pwd_len = ?ml_str_len(@lvos_cwd_path);
+    call ml_term_print_at(0, #LVOS_ROW_PROMPT, @lvos_cwd_path);
+    call ml_term_put_char_at(pwd_len, #LVOS_ROW_PROMPT, '>');
+    call ml_term_put_char_at(pwd_len + 1, #LVOS_ROW_PROMPT, ' ');
+
+    set col = pwd_len + 2;
     set i = 0;
     while i < shell_line_len {
         set p = @shell_line_buf + i;
         set c = [p];
-        call ml_term_put_char_at(2 + i, #LVOS_ROW_PROMPT, c);
+        call ml_term_put_char_at(col + i, #LVOS_ROW_PROMPT, c);
         incr i;
     }
 }
@@ -165,7 +440,7 @@ fn demo_e { call spinner(320, 5); }
 
 
 begin
-asm { CLI }
+#ML_INT_ENTER_CRITICAL_SECTION();
 #ML_KB_REGISTER_ISR();
 #ML_GX_SET_FPS(60);
 #ML_GX_FILL(#ML_CLR_LAVENDER)
@@ -190,7 +465,15 @@ call ml_term_clear();
 #ML_GX_REGISTER_FLIP_ISR();
 call lvk_init();
 
-asm { STI }
+if ?lvfs_mount() == 0 {
+    call lvfs_format();
+    call lvfs_mount();
+}
+set lvos_cwd_inode = #LVFS_ROOT_INODE;
+set [u8 @lvos_cwd_path + 0] = '/';
+set [u8 @lvos_cwd_path + 1] = 0;
+
+#ML_INT_EXIT_CRITICAL_SECTION();
 
 
 call lvk_spawn(@demo_a);
@@ -198,7 +481,6 @@ call lvk_spawn(@demo_b);
 call lvk_spawn(@demo_c);
 call lvk_spawn(@demo_d);
 call lvk_spawn(@demo_e);
-call lvk_spawn(@ps_monitor);
 call lvk_spawn(@shell_main);
 
 while 1 {
