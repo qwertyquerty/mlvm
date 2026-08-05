@@ -18,6 +18,7 @@ class StructInfo:
 class FunctionInfo:
     params: list  # (name, type) in declared order
     address: int = None
+    defined: bool = False  # False for a forward declaration awaiting its real body
 
 
 @dataclass
@@ -105,8 +106,26 @@ class SymbolTable:
         self.static_vars[name] = (f"{elem_type}[]", None)
 
     def declare_function(self, name, params, address=None):
+        existing = self.functions.get(name)
+        if existing is not None:
+            if existing.defined:
+                raise MlvcSyntaxError(f"Symbol {name} previously defined!")
+            if [ptype for _, ptype in params] != [ptype for _, ptype in existing.params]:
+                raise MlvcSyntaxError(f"{name} redefined with different parameters than its forward declaration!")
+            existing.params = list(params)
+            if address is not None:
+                existing.address = address
+            existing.defined = True
+            return
         self.check_global_name_free(name)
-        self.functions[name] = FunctionInfo(params=list(params), address=address)
+        self.functions[name] = FunctionInfo(params=list(params), address=address, defined=True)
+
+    def declare_function_signature(self, name, params, address=None):
+        # A forward declaration
+        # registers the signature so calls ahead of the real definition
+        # typecheck, but declare_function must still supply the body later.
+        self.check_global_name_free(name)
+        self.functions[name] = FunctionInfo(params=list(params), address=address, defined=False)
 
     def declare_struct(self, name, field_list):
         self.check_struct_name_free(name)

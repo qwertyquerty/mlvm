@@ -273,7 +273,8 @@ class Parser:
             self.parse_struct_decl()
             return []
         if token == "fn":
-            return [self.parse_function_decl()]
+            node = self.parse_function_decl()
+            return [node] if node is not None else []
         if token == "begin":
             self.advance()
             return [BeginMarker()]
@@ -490,6 +491,11 @@ class Parser:
         if self.peek() == "(":
             self.advance()
             params = self.parse_function_params()
+
+        if self.peek() == ";":
+            self.advance()
+            self.symbols.declare_function_signature(name, params, address=address)
+            return None
 
         self.expect("{")
 
