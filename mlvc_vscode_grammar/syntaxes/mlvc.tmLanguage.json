@@ -34,7 +34,7 @@
 		},
 		{
 			"name": "keyword.control.mlvc",
-			"match": "\\b(if|else|return|rti|while|set|define|macro|include|begin|fn|var|alloc|data|struct|call|asm|incr|decr|svi|ldi)\\b"
+			"match": "\\b(if|else|return|rti|while|set|define|macro|include|begin|fn|var|array|data|struct|call|asm|incr|decr|svi|ldi)\\b"
 		},
 		{
 			"name": "string.quoted.double.mlvc",

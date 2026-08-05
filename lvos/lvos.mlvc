@@ -74,7 +74,7 @@ fn ps_monitor {
 
 define LVOS_ROW_PROMPT 3;
 define SHELL_LINE_MAX 29;
-alloc u8 30 shell_line_buf;
+array u8 30 shell_line_buf;
 var u8 shell_line_len;
 data u8 shell_prompt_prefix "> ";
 data u8 cmd_kill_prefix "kill ";

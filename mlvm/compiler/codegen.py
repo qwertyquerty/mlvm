@@ -299,41 +299,21 @@ class Codegen:
                     self.append_instruction(f"WR{output_register}{suffix}")
 
         elif isinstance(target, FieldTarget):
-            base_type = self.symbols.resolve_type(target.base, self.local_scope)
-            elem_size, index_expr = None, None
-
-            if target.kind == "index":
-                struct_info = self.symbols.structs[block_element_type(base_type)]
-                offset, field_type = struct_info.fields[target.field]
-                elem_size, index_expr = struct_info.size, target.index_expr
-            elif target.kind == "direct":
-                offset, field_type = self.symbols.structs[base_type].fields[target.field]
-            else:  # "deref"
-                offset, field_type = self.symbols.structs[pointee_type(base_type)].fields[target.field]
-
-            folded = None
-            if target.kind != "deref":
-                folded = self.try_fold_field_address(target.base, offset, index_expr=index_expr, elem_size=elem_size)
+            folded = self.try_fold_chain_address(target.base, target.is_pointer_base, target.steps)
 
             if folded:
                 # A folded address is a literal operand, so the value can stay in C, no conflict
                 prefix, addr = folded
-                self.append_instruction(f"W{prefix}{output_register}{var_write_suffix(field_type)} {addr}")
+                self.append_instruction(f"W{prefix}{output_register}{var_write_suffix(target.final_type)} {addr}")
             else:
                 # The computed field address lands in C, so move the value out first if needed
                 if output_register == "C":
                     self.append_instruction("SAC")
                     output_register = "A"
 
-                if target.kind == "index":
-                    addr_expr = self._index_field_addr_expr(target.base, index_expr, elem_size, offset)
-                elif target.kind == "direct":
-                    addr_expr = self._direct_field_addr_expr(target.base, offset)
-                else:
-                    addr_expr = self._deref_field_addr_expr(target.base, offset)
-
+                addr_expr = self._chain_addr_expr(target.base, target.is_pointer_base, target.steps)
                 self.solve_expression_address(addr_expr, "A")
-                self.append_instruction(f"WR{output_register}{var_write_suffix(field_type)}")
+                self.append_instruction(f"WR{output_register}{var_write_suffix(target.final_type)}")
 
         else:
             raise AssertionError(f"Unexpected set target: {target!r}")
@@ -506,35 +486,54 @@ class Codegen:
                 raise AssertionError(f"Unexpected asm block line: {line!r}")
         self.asm += "    /* end asm block */\n"
 
-    def _direct_field_addr_expr(self, base_name, offset):
-        return Expr(rpn=[f"@{base_name}", str(offset), "+"])
+    def _chain_addr_expr(self, base_name, is_pointer_base, steps):
+        """Builds an address Expr for base_name plus a chain of ('field',name)/('index',expr)
+        steps, walking the symbol table one step at a time so any depth of nesting works."""
+        if is_pointer_base:
+            cur_type = pointee_type(self.symbols.resolve_type(base_name, self.local_scope))
+            rpn = [base_name]  # bare name reads the pointer's own stored value
+        else:
+            cur_type = self.symbols.resolve_type(base_name, self.local_scope)
+            rpn = [f"@{base_name}"]
 
-    def _deref_field_addr_expr(self, ptr_name, offset):
-        # ptr_name used bare, reads the pointer's own value (the pointee address),
-        return Expr(rpn=[ptr_name, str(offset), "+"])
+        for kind, value in steps:
+            if kind == "field":
+                offset, cur_type = self.symbols.structs[cur_type].fields[value]
+                rpn += [str(offset), "+"]
+            else:  # "index"
+                elem_type = block_element_type(cur_type)
+                rpn += value.rpn + [str(self.symbols.type_size(elem_type)), "*", "+"]
+                cur_type = elem_type
 
-    def _index_field_addr_expr(self, base_name, index_expr, elem_size, offset):
-        return Expr(rpn=[f"@{base_name}"] + index_expr.rpn + [str(elem_size), "*", str(offset), "+", "+"])
+        return Expr(rpn=rpn)
 
-    def try_fold_field_address(self, base_name, offset, index_expr=None, elem_size=None):
-        """base.field and base<literal>.field addresses are compile-time constants, so this
-        folds the address into one fused operand instead of computing it at runtime.
-        Returns (prefix, addr) or None if not foldable."""
-        index_literal = 0
-        if index_expr is not None:
-            if len(index_expr.rpn) == 1 and re.match(VALUE_RE, str(index_expr.rpn[0])):
-                index_literal = int(str(index_expr.rpn[0]), 0)
-            else:
-                return None
+    def try_fold_chain_address(self, base_name, is_pointer_base, steps):
+        """base.field...<literal>... addresses are compile-time constants whenever every index
+        in the chain is a literal, so this folds the whole thing into one fused operand instead
+        of computing it at runtime. Returns (prefix, addr) or None if not foldable."""
+        if is_pointer_base:
+            return None
+
+        cur_type = self.symbols.resolve_type(base_name, self.local_scope)
+        total_offset = 0
+        for kind, value in steps:
+            if kind == "field":
+                offset, cur_type = self.symbols.structs[cur_type].fields[value]
+                total_offset += offset
+            else:  # "index"
+                if not (len(value.rpn) == 1 and re.match(VALUE_RE, str(value.rpn[0]))):
+                    return None
+                elem_type = block_element_type(cur_type)
+                total_offset += int(str(value.rpn[0]), 0) * self.symbols.type_size(elem_type)
+                cur_type = elem_type
 
         if self._is_local(base_name):
-            addr = self._local_imm(base_name) + index_literal * (elem_size or 0) + offset
-            return "S", str(addr)
+            return "S", str(self._local_imm(base_name) + total_offset)
 
         static_addr = self.symbols.resolve_static_address(base_name)
         if static_addr is None:
             return None
-        return "I", str(static_addr + index_literal * (elem_size or 0) + offset)
+        return "I", str(static_addr + total_offset)
 
     def evaluate_const_operation(self, a, b, instruction):
         # Constant folding in the coolest way: run a virtual processor at compile time
@@ -599,43 +598,16 @@ class Codegen:
                 if reg != "C":
                     self.append_instruction(f"S{reg}C")
 
-            elif isinstance(e, tuple) and e[0] == "field":  # name.field, direct non-pointer struct var
-                _, base_name, field_name = e
-                base_type = self.symbols.resolve_type(base_name, self.local_scope)
-                offset, field_type = self.symbols.structs[base_type].fields[field_name]
-                folded = self.try_fold_field_address(base_name, offset)
+            elif isinstance(e, tuple) and e[0] == "path":  # base.field...<index>..., any depth
+                _, base_name, is_pointer_base, steps, final_type = e
+                folded = self.try_fold_chain_address(base_name, is_pointer_base, steps)
                 if folded:
                     prefix, addr = folded
-                    self.append_instruction(f"R{prefix}{reg}{var_read_suffix(field_type)} {addr}")
+                    self.append_instruction(f"R{prefix}{reg}{var_read_suffix(final_type)} {addr}")
                 else:
-                    addr_expr = self._direct_field_addr_expr(base_name, offset)
+                    addr_expr = self._chain_addr_expr(base_name, is_pointer_base, steps)
                     self.solve_expression_address(addr_expr, "B" if reg == "A" else None, preserve_dreg=dreg_occupied)
-                    self.append_instruction(f"RD{reg}{var_read_suffix(field_type)}")
-
-            elif isinstance(e, tuple) and e[0] == "deref_field":  # [ptr].field, struct pointer
-                _, inner_tokens, field_name = e
-                ptr_name = str(inner_tokens[0])
-                base_type = self.symbols.resolve_type(ptr_name, self.local_scope)
-                offset, field_type = self.symbols.structs[pointee_type(base_type)].fields[field_name]
-                addr_expr = self._deref_field_addr_expr(ptr_name, offset)
-                self.solve_expression_address(addr_expr, "B" if reg == "A" else None, preserve_dreg=dreg_occupied)
-                self.append_instruction(f"RD{reg}{var_read_suffix(field_type)}")
-
-            elif isinstance(e, tuple) and e[0] == "index_field":  # name<index>.field, array of structs
-                _, base_name, index_expr, field_name = e
-                base_type = self.symbols.resolve_type(base_name, self.local_scope)
-                struct_info = self.symbols.structs[block_element_type(base_type)]
-                offset, field_type = struct_info.fields[field_name]
-                folded = self.try_fold_field_address(
-                    base_name, offset, index_expr=index_expr, elem_size=struct_info.size
-                )
-                if folded:
-                    prefix, addr = folded
-                    self.append_instruction(f"R{prefix}{reg}{var_read_suffix(field_type)} {addr}")
-                else:
-                    addr_expr = self._index_field_addr_expr(base_name, index_expr, struct_info.size, offset)
-                    self.solve_expression_address(addr_expr, "B" if reg == "A" else None, preserve_dreg=dreg_occupied)
-                    self.append_instruction(f"RD{reg}{var_read_suffix(field_type)}")
+                    self.append_instruction(f"RD{reg}{var_read_suffix(final_type)}")
 
             elif isinstance(e, tuple) and e[0] == "call":  # ?fn_name(args), a call as an operand
                 _, fn_name, args_exprs = e

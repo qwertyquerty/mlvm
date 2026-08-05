@@ -13,11 +13,11 @@ define ML_TERM_CR '\r';
 define ML_TERM_BG_COLOR 1;
 
 /* What should be on screen, one char per cell. */
-alloc u8 #ML_TERM_SIZE ml_term_buffer;
+array u8 #ML_TERM_SIZE ml_term_buffer;
 
 /* What's actually on screen right now. ml_term_draw diffs against this to only redraw changed
    cells instead of the whole grid every frame. */
-alloc u8 #ML_TERM_SIZE ml_term_drawn_buffer;
+array u8 #ML_TERM_SIZE ml_term_drawn_buffer;
 
 var u8 ml_term_cursor_col;
 var u8 ml_term_cursor_row;

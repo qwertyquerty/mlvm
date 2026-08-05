@@ -1,3 +1,5 @@
+import re
+
 # Virtual registers for inverse
 INVERSE_REGISTERS = {"A": "X", "B": "Y", "C": "Z"}
 
@@ -111,8 +113,12 @@ def is_pointer_type(var_type):
     return var_type.endswith("*")
 
 
+# Array types (both top-level `array` blocks and struct array fields) are stored internally as type[count]
+_ARRAY_TYPE_RE = re.compile(r"^(.+)\[(\d+)\]$")
+
+
 def is_block_type(var_type):
-    return var_type.endswith("[]")
+    return _ARRAY_TYPE_RE.match(var_type) is not None
 
 
 def pointee_type(var_type):
@@ -120,7 +126,11 @@ def pointee_type(var_type):
 
 
 def block_element_type(var_type):
-    return var_type[:-2]
+    return _ARRAY_TYPE_RE.match(var_type).group(1)
+
+
+def block_element_count(var_type):
+    return int(_ARRAY_TYPE_RE.match(var_type).group(2))
 
 
 def var_size(var_type):
@@ -142,7 +152,7 @@ KEYWORDS = [
     "macro",
     "include",
     "var",
-    "alloc",
+    "array",
     "data",
     "struct",
     "set",
@@ -163,12 +173,6 @@ KEYWORDS = [
 VALUE_RE = r"(0x[0-9A-Fa-f]+|0b[01]+|-?[0-9]+)"
 SYMBOL_RE = r"[a-zA-Z\_]+[a-zA-Z0-9\_]*"
 WHITESPACE_RE = r"[ \n]+"
-
-# "." is never split out by the tokenizer (would break .set/.seekpush asm directives and include paths)
-# Therefore, name.field, .field, etc., arrive as one merged token
-# these patterns will pick those merged tokens back apart
-FIELD_TOKEN_RE = r"([a-zA-Z\_]+[a-zA-Z0-9\_]*)\.([a-zA-Z\_]+[a-zA-Z0-9\_]*)"
-DOT_FIELD_RE = r"\.([a-zA-Z\_]+[a-zA-Z0-9\_]*)"
 
 # Escape set for string/char literals
 _ESCAPES = {"n": "\n", "r": "\r", "0": "\0", "\\": "\\", '"': '"', "'": "'"}

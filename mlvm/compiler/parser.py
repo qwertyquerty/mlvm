@@ -39,8 +39,6 @@ from .grammar import (
     TYPE_KEYWORDS,
     SYMBOL_RE,
     VALUE_RE,
-    FIELD_TOKEN_RE,
-    DOT_FIELD_RE,
     EXPRESSION_OPERATOR_PRECEDENCE,
     is_pointer_type,
     is_block_type,
@@ -50,7 +48,7 @@ from .grammar import (
 )
 
 # Keywords with no runtime effect
-_DECL_ONLY_KEYWORDS = ("var", "alloc", "data", "struct", "define", "macro")
+_DECL_ONLY_KEYWORDS = ("var", "array", "data", "struct", "define", "macro")
 
 
 class Parser:
@@ -264,8 +262,8 @@ class Parser:
             return self.parse_include()
         if token == "var":
             return self.parse_var_decl()
-        if token == "alloc":
-            node = self.parse_alloc_decl()
+        if token == "array":
+            node = self.parse_array_decl()
             return [node] if node is not None else []
         if token == "data":
             return [self.parse_data_decl()]
@@ -372,18 +370,18 @@ class Parser:
                 self.advance()
                 return nodes
 
-    def parse_alloc_decl(self):
-        self._check_local_decl_position("alloc")
-        self.advance()  # 'alloc'
+    def parse_array_decl(self):
+        self._check_local_decl_position("array")
+        self.advance()  # 'array'
         elem_type = self.parse_type_prefix()
 
         count_token = self.advance()
         if not re.match(VALUE_RE, count_token):
-            self.syntax_error("alloc must specify an element count!")
+            self.syntax_error("array must specify an element count!")
         count = int(count_token, 0)
 
-        name = self.parse_symbol_name("alloc")
-        address = self.parse_optional_address("alloc")
+        name = self.parse_symbol_name("array")
+        address = self.parse_optional_address("array")
 
         self.expect(";")
         return self._declare_block(name, elem_type, count, address)
@@ -404,7 +402,7 @@ class Parser:
         mask = 0xFF if self.symbols.type_size(elem_type) == 1 else 0xFFFF
         values = [v & mask for v in values]
 
-        self.symbols.declare_data_block(name, elem_type)
+        self.symbols.declare_data_block(name, elem_type, len(values))
         return DataBlockDecl(name=name, elem_type=elem_type, values=values, source_string=source_string)
 
     def _parse_data_initializer(self):
@@ -456,7 +454,7 @@ class Parser:
         values = self._string_literal_bytes(token)
         name = f"mlvc_string_literal_{self.string_literal_counter}"
         self.string_literal_counter += 1
-        self.symbols.declare_data_block(name, "u8")
+        self.symbols.declare_data_block(name, "u8", len(values))
         block = DataBlockDecl(name=name, elem_type="u8", values=values, source_string=str(token))
         self.pending_data_blocks.append(block)
         return name
@@ -468,6 +466,18 @@ class Parser:
         self.expect("{")
         fields = []
         while self.peek() != "}":
+            if self.peek() == "array":  # array TYPE COUNT name;
+                self.advance()
+                elem_type = self.parse_type_prefix()
+                count_token = self.advance()
+                if not re.match(VALUE_RE, count_token):
+                    self.syntax_error("array field must specify an element count!")
+                count = int(count_token, 0)
+                field_name = self.parse_symbol_name("struct field")
+                self.expect(";")
+                fields.append((field_name, f"{elem_type}[{count}]"))
+                continue
+
             field_type = self.parse_type_prefix()
             if field_type not in TYPE_KEYWORDS and not is_pointer_type(field_type):
                 self.syntax_error(f"Struct fields cannot embed another struct by value: {field_type}!")
@@ -633,14 +643,13 @@ class Parser:
 
                 if explicit_type is not None:
                     self.syntax_error("Cannot combine an explicit type with .field access!")
-
-                field_token = self.advance()
-                field_match = re.fullmatch(DOT_FIELD_RE, field_token)
-                if not field_match:
+                if not self.peek().startswith("."):
                     self.syntax_error("Malformed left hand side of set!")
-                field_name = field_match.group(1)
-                self.check_deref_field(dest, field_name)
-                return FieldTarget(kind="deref", base=dest, field=field_name)
+
+                steps = self.parse_chain_steps()
+                final_type = self.resolve_chain_type(dest, True, steps)
+                self.check_value_type(final_type, f"[{dest}]")
+                return FieldTarget(base=dest, is_pointer_base=True, steps=steps, final_type=final_type)
 
             # A multi-token computed address, explicit_type is mandatory
             if explicit_type is None:
@@ -649,37 +658,22 @@ class Parser:
                 )
             return DerefTarget(expr=self.make_expr(inner), explicit_type=explicit_type)
 
-        if re.fullmatch(FIELD_TOKEN_RE, token):  # name.field = ...; a direct struct variable
+        if re.match(SYMBOL_RE, token):  # name = ... / name.field... = ... / name<index>... = ...
             self.advance()
-            field_match = re.fullmatch(FIELD_TOKEN_RE, token)
-            base_name, field_name = field_match.group(1), field_match.group(2)
-            self.check_direct_field(base_name, field_name)
-            return FieldTarget(kind="direct", base=base_name, field=field_name)
+            base_name, leading_fields = self._split_dotted(str(token))
+            steps = [("field", f) for f in leading_fields] + self.parse_chain_steps()
 
-        if re.match(SYMBOL_RE, token):
-            self.advance()
-            name = str(token)
+            if not steps:
+                var_type = self.symbols.resolve_type(base_name, self.local_scope)
+                if var_type is None:
+                    self.syntax_error(f"Undefined symbol: {base_name}!")
+                if is_block_type(var_type):
+                    self.syntax_error(f"{base_name} is a memory block; use [{base_name}] to write to it!")
+                return SymbolTarget(name=base_name)
 
-            if self.peek() == "<":  # name<index>.field = ...; an array of structs
-                self.advance()
-                index_tokens = []
-                while self.peek() != ">":
-                    index_tokens.append(self.advance())
-                self.advance()  # '>'
-                field_token = self.advance()
-                field_match = re.fullmatch(DOT_FIELD_RE, field_token)
-                if not field_match:
-                    self.syntax_error("Expected .field after array index in set!")
-                field_name = field_match.group(1)
-                self.check_index_field(name, field_name)
-                return FieldTarget(kind="index", base=name, field=field_name, index_expr=self.make_expr(index_tokens))
-
-            var_type = self.symbols.resolve_type(name, self.local_scope)
-            if var_type is None:
-                self.syntax_error(f"Undefined symbol: {name}!")
-            if is_block_type(var_type):
-                self.syntax_error(f"{name} is a memory block; use [{name}] to write to it!")
-            return SymbolTarget(name=name)
+            final_type = self.resolve_chain_type(base_name, False, steps)
+            self.check_value_type(final_type, base_name)
+            return FieldTarget(base=base_name, is_pointer_base=False, steps=steps, final_type=final_type)
 
         self.syntax_error("Malformed left hand side of set!")
 
@@ -883,37 +877,106 @@ class Parser:
         self.pending_macro_name = prev_name
         return statements
 
-    # Struct field access validation
-    def check_direct_field(self, base_name, field_name):
+    # Field/array chain resolution: base.field...<index>.field... or [base].field...<index>...
+    def resolve_chain_type(self, base_name, is_pointer_base, steps):
         base_type = self.symbols.resolve_type(base_name, self.local_scope)
         if base_type is None:
             self.syntax_error(f"Undefined symbol: {base_name}!")
-        if is_pointer_type(base_type):
-            self.syntax_error(f"{base_name} is a pointer; use [{base_name}].{field_name} instead!")
-        if base_type not in self.symbols.structs:
-            self.syntax_error(f"{base_name} is not a struct!")
-        if field_name not in self.symbols.structs[base_type].fields:
-            self.syntax_error(f"{base_type} has no field {field_name}!")
 
-    def check_deref_field(self, ptr_name, field_name):
-        base_type = self.symbols.resolve_type(ptr_name, self.local_scope)
-        if base_type is None:
-            self.syntax_error(f"Undefined symbol: {ptr_name}!")
-        if not is_pointer_type(base_type) or pointee_type(base_type) not in self.symbols.structs:
-            self.syntax_error(f"{ptr_name} is not a pointer to a struct!")
-        struct_name = pointee_type(base_type)
-        if field_name not in self.symbols.structs[struct_name].fields:
-            self.syntax_error(f"{struct_name} has no field {field_name}!")
+        if is_pointer_base:
+            if not is_pointer_type(base_type):
+                self.syntax_error(f"{base_name} is not a pointer!")
+            cur_type = pointee_type(base_type)
+        else:
+            if is_pointer_type(base_type):
+                self.syntax_error(f"{base_name} is a pointer; use [{base_name}] instead!")
+            cur_type = base_type
 
-    def check_index_field(self, base_name, field_name):
-        base_type = self.symbols.resolve_type(base_name, self.local_scope)
-        if base_type is None:
-            self.syntax_error(f"Undefined symbol: {base_name}!")
-        if not is_block_type(base_type) or block_element_type(base_type) not in self.symbols.structs:
-            self.syntax_error(f"{base_name} is not an array of structs!")
-        struct_name = block_element_type(base_type)
-        if field_name not in self.symbols.structs[struct_name].fields:
-            self.syntax_error(f"{struct_name} has no field {field_name}!")
+        for kind, value in steps:
+            if kind == "field":
+                if cur_type not in self.symbols.structs:
+                    self.syntax_error(f"{cur_type} is not a struct, has no field {value}!")
+                if value not in self.symbols.structs[cur_type].fields:
+                    self.syntax_error(f"{cur_type} has no field {value}!")
+                _, cur_type = self.symbols.structs[cur_type].fields[value]
+            else:  # "index"
+                if not is_block_type(cur_type):
+                    self.syntax_error(f"cannot index into {cur_type}, it isn't an array!")
+                cur_type = block_element_type(cur_type)
+
+        return cur_type
+
+    def check_value_type(self, type_, what):
+        # Raises if type_ can't be read/written as a plain value
+        if type_ in self.symbols.structs:
+            self.syntax_error(f"{what} is a struct; access one of its fields instead!")
+        if is_block_type(type_):
+            self.syntax_error(f"{what} is an array; index it with <...> to get a single element!")
+
+    def _split_dotted(self, token):
+        # "a.b.c" -> ("a", ["b","c"]); ".b.c" -> (None, ["b","c"]); "a" -> ("a", [])
+        parts = str(token).split(".")
+        return (parts[0] if parts[0] != "" else None), parts[1:]
+
+    def parse_chain_steps(self):
+        # Consumes a run of <index> / .field steps from the token stream
+        steps = []
+        while True:
+            if self.peek() == "<":
+                self.advance()
+                index_tokens = []
+                depth = 0
+                while not (depth == 0 and self.peek() == ">"):
+                    tok = self.advance()
+                    if tok == "(":
+                        depth += 1
+                    elif tok == ")":
+                        depth -= 1
+                    index_tokens.append(tok)
+                self.advance()  # '>'
+                if len(index_tokens) == 0:
+                    self.syntax_error("Malformed array index!")
+                steps.append(("index", self.make_expr(index_tokens)))
+                continue
+            if self.peek().startswith("."):
+                _, fields = self._split_dotted(self.advance())
+                steps.extend(("field", f) for f in fields)
+                continue
+            break
+        return steps
+
+    def _parse_chain_steps_list(self, expression, i):
+        # List-based twin of parse_chain_steps, for infix_to_rpn's pre-extracted token list.
+        # Returns (steps, next_i).
+        steps = []
+        while i < len(expression):
+            token = expression[i]
+            if token == "<":
+                depth = 0
+                j = i + 1
+                while j < len(expression):
+                    if expression[j] == "(":
+                        depth += 1
+                    elif expression[j] == ")":
+                        depth -= 1
+                    elif expression[j] == ">" and depth == 0:
+                        break
+                    j += 1
+                if j >= len(expression):
+                    self.syntax_error("Malformed array index: missing >!")
+                index_tokens = expression[i + 1 : j]
+                if len(index_tokens) == 0:
+                    self.syntax_error("Malformed array index!")
+                steps.append(("index", self.make_expr(index_tokens)))
+                i = j + 1
+                continue
+            if str(token).startswith("."):
+                _, fields = self._split_dotted(token)
+                steps.extend(("field", f) for f in fields)
+                i += 1
+                continue
+            break
+        return steps, i
 
     def make_expr(self, tokens):
         return Expr(rpn=self.infix_to_rpn(list(tokens)))
@@ -967,15 +1030,18 @@ class Parser:
                     if len(inner) == 0:
                         self.syntax_error("Malformed pointer dereference: missing expression after type!")
 
-                dot_match = j < len(expression) and re.fullmatch(DOT_FIELD_RE, expression[j])
-                if dot_match:  # [ptr].field struct pointer field access
+                starts_chain = j < len(expression) and str(expression[j]).startswith(".")
+                if starts_chain:  # [ptr].field...<index>... struct pointer field/array chain
                     if explicit_type is not None:
                         self.syntax_error("Cannot combine an explicit type with .field access!")
                     if len(inner) != 1:
                         self.syntax_error("[...].field requires a pointer-to-struct variable, e.g. [ptr].field!")
-                    self.check_deref_field(str(inner[0]), dot_match.group(1))
-                    output.append(("deref_field", inner, dot_match.group(1)))
-                    i = j + 1
+                    base_name = str(inner[0])
+                    steps, next_i = self._parse_chain_steps_list(expression, j)
+                    final_type = self.resolve_chain_type(base_name, True, steps)
+                    self.check_value_type(final_type, f"[{base_name}]")
+                    output.append(("path", base_name, True, steps, final_type))
+                    i = next_i
                     continue
 
                 # inner kept as raw tokens too, since codegen has special cases for a single bare symbol
@@ -1002,20 +1068,16 @@ class Parser:
                             break
                         j += 1
 
-                    dot_match = (
-                        close is not None
-                        and close + 1 < len(expression)
-                        and re.fullmatch(DOT_FIELD_RE, expression[close + 1])
+                    starts_chain = (
+                        close is not None and close + 1 < len(expression) and str(expression[close + 1]).startswith(".")
                     )
-
-                    if dot_match:
-                        index_tokens = expression[i + 1 : close]
-                        if len(index_tokens) == 0:
-                            self.syntax_error("Malformed array index!")
-                        base_name = output.pop()
-                        self.check_index_field(str(base_name), dot_match.group(1))
-                        output.append(("index_field", base_name, self.make_expr(index_tokens), dot_match.group(1)))
-                        i = close + 2
+                    if starts_chain:
+                        base_name = str(output.pop())
+                        steps, next_i = self._parse_chain_steps_list(expression, i)
+                        final_type = self.resolve_chain_type(base_name, False, steps)
+                        self.check_value_type(final_type, base_name)
+                        output.append(("path", base_name, False, steps, final_type))
+                        i = next_i
                         continue
 
             if token == "?":  # ?fn_name(arg1, arg2), a function call usable as an operand
@@ -1057,11 +1119,15 @@ class Parser:
                 i = j + 1
                 continue
 
-            if re.fullmatch(FIELD_TOKEN_RE, token):  # name.field, a direct struct var
-                field_match = re.fullmatch(FIELD_TOKEN_RE, token)
-                self.check_direct_field(field_match.group(1), field_match.group(2))
-                output.append(("field", field_match.group(1), field_match.group(2)))
-                i += 1
+            if "." in token and re.match(SYMBOL_RE, token):  # name.field...<index>..., a struct var chain
+                base_name, leading_fields = self._split_dotted(token)
+                leading_steps = [("field", f) for f in leading_fields]
+                more_steps, next_i = self._parse_chain_steps_list(expression, i + 1)
+                steps = leading_steps + more_steps
+                final_type = self.resolve_chain_type(base_name, False, steps)
+                self.check_value_type(final_type, base_name)
+                output.append(("path", base_name, False, steps, final_type))
+                i = next_i
                 continue
 
             if token == "@":  # getting address of symbol, collapse "@ name" into one operand

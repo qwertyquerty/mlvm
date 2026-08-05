@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 
 from mlvm.const import PROG_MEM_START_ADDR, PROG_MEM_END_ADDR
 from .errors import MlvcMemoryError, MlvcSyntaxError
-from .grammar import KEYWORDS, var_size
+from .grammar import KEYWORDS, var_size, is_block_type, block_element_type, block_element_count
 
 
 @dataclass
@@ -44,7 +44,7 @@ class LocalScope:
 
     def declare_block(self, name, elem_type, count, symbols):
         self.check_name_free(name, symbols)
-        self.var_offsets[name] = (self.frame_bytes, f"{elem_type}[]")
+        self.var_offsets[name] = (self.frame_bytes, f"{elem_type}[{count}]")
         self.frame_bytes += symbols.type_size(elem_type) * count
 
     def __contains__(self, name):
@@ -63,6 +63,8 @@ class SymbolTable:
     def type_size(self, var_type):
         if var_type in self.structs:
             return self.structs[var_type].size
+        if is_block_type(var_type):
+            return self.type_size(block_element_type(var_type)) * block_element_count(var_type)
         return var_size(var_type)
 
     def check_global_name_free(self, name):
@@ -95,15 +97,15 @@ class SymbolTable:
 
     def declare_static_block(self, name, elem_type, count, address=None):
         address = self._reserve_static(name, self.type_size(elem_type) * count, address)
-        self.static_vars[name] = (f"{elem_type}[]", address)
+        self.static_vars[name] = (f"{elem_type}[{count}]", address)
         return address
 
-    def declare_data_block(self, name, elem_type):
+    def declare_data_block(self, name, elem_type, count):
         # A data block address is never known at compile time, it ends up wherever the assembler
         # places it in ROM, addressed by label. Storing None here makes resolve_static_address
         # correctly decide its not foldable.
         self.check_global_name_free(name)
-        self.static_vars[name] = (f"{elem_type}[]", None)
+        self.static_vars[name] = (f"{elem_type}[{count}]", None)
 
     def declare_function(self, name, params, address=None):
         existing = self.functions.get(name)

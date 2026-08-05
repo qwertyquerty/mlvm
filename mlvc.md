@@ -128,12 +128,12 @@ fn example {
 ```
 
 Locals also can't be pinned to an address, and can't be declared inside a nested `if`/`while`
-block, only directly in the function's own body. `alloc` locals follow these same two rules.
+block, only directly in the function's own body. `array` locals follow these same two rules.
 
 ## Blocks
 
 ```mlvc
-alloc u8 32 buffer;
+array u8 32 buffer;
 ```
 
 32 bytes, uninitialized, zeroed at boot.
@@ -141,13 +141,13 @@ alloc u8 32 buffer;
 ### Array of structs
 
 ```mlvc
-alloc point_t 4 points;
+array point_t 4 points;
 ```
 
 ### Pinned to a fixed address
 
 ```mlvc
-alloc u8 16 fixed_buf @ 0x1000;
+array u8 16 fixed_buf @ 0x1000;
 ```
 
 ### Naming
@@ -208,7 +208,7 @@ Field access through a struct pointer always uses `[pp].field`, never `pp.field`
 ### Array of structs, write
 
 ```mlvc
-alloc point_t 4 points;
+array point_t 4 points;
 set points<0>.x = 5;
 set points<counter>.y = 9;
 ```
@@ -218,6 +218,20 @@ set points<counter>.y = 9;
 ```mlvc
 set someval = points<0>.x;
 ```
+
+### Array field
+
+```mlvc
+struct inode_t {
+    u8 type;
+    array u16 30 indirect;
+};
+
+var inode_t node;
+set node.indirect<3> = 500;
+set someval = node.indirect<3>;
+```
+
 
 ## Pointers
 
@@ -294,6 +308,28 @@ fn isr_handler @ 0xFFE0 {
 ```
 
 Useful for interrupt vectors and other fixed entry points.
+
+### Forward declaration
+
+```mlvc
+fn is_even(u16 n);
+
+fn is_odd(u16 n) {
+    if n == 0 {
+        return 0;
+    }
+    return ?is_even(n - 1);
+}
+
+fn is_even(u16 n) {
+    if n == 0 {
+        return 1;
+    }
+    return ?is_odd(n - 1);
+}
+```
+
+A signature ending in `;` instead of a braced block forward declares the function so code can call it without defining it yet. The real definition (matching parameter types) must appear later on.
 
 ### Return values
 

@@ -12,7 +12,7 @@ define ML_KB_KEY_SHIFT_R 0x02;
 define ML_KB_RING_SIZE 32;
 
 /* Ring buffer of received key codes, filled by ml_kb_isr and drained by ml_kb_read. */
-alloc u8 #ML_KB_RING_SIZE kb_ring_buffer;
+array u8 #ML_KB_RING_SIZE kb_ring_buffer;
 var u8 ml_kb_ring_head;
 var u8 ml_kb_ring_tail;
 var u8 ml_kb_shift_held;

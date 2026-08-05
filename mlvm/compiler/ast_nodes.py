@@ -69,10 +69,10 @@ class DerefTarget:
 
 @dataclass
 class FieldTarget:
-    kind: str  # "direct" | "index" | "deref"
     base: str
-    field: str
-    index_expr: Optional[Expr] = None  # only present when kind == "index"
+    is_pointer_base: bool
+    steps: list
+    final_type: str
 
 
 @dataclass

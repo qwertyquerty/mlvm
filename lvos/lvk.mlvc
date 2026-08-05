@@ -5,7 +5,7 @@ define LVK_STACK_SLICE_SIZE 256;
 
 /* one CPU frame is 13 bytes: P,A,B,C,D (u16 each) + S (u8) + T (u16) */
 define LVK_FRAME_SIZE 13;
-alloc u8 104 lvk_frames; /* LVK_MAX_PROCESSES * LVK_FRAME_SIZE */
+array u8 104 lvk_frames; /* LVK_MAX_PROCESSES * LVK_FRAME_SIZE */
 
 /* how often the timer preempts, also the unit lvk_sleep counts down in, since sleeping processes
    are only ever woken up by this same tick */
@@ -21,7 +21,7 @@ struct proc_t {
     u16 run_count;      /* how many ticks this process has been ran */
 };
 
-alloc proc_t #LVK_MAX_PROCESSES lvk_process_table;
+array proc_t #LVK_MAX_PROCESSES lvk_process_table;
 
 define LVK_PROC_STAT_NONE       0x0;
 define LVK_PROC_STAT_RUNNING    0x1;
