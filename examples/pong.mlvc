@@ -11,7 +11,7 @@ define SCREEN_SIZE 256;
 
 var u8 paddle_x score buttons;
 
-struct ball.t {
+struct ball_t {
     u8 x;
     u8 y;
     i8 vx;
@@ -19,7 +19,7 @@ struct ball.t {
     u8 size;
 };
 
-var ball.t ball;
+var ball_t ball;
 
 begin
 asm { CLI }
