@@ -199,7 +199,7 @@ class Parser:
 
     def parse_symbol_name(self, what, raw=False):
         token = self.advance_raw() if raw else self.advance()
-        if not re.match(SYMBOL_RE, token):
+        if not re.fullmatch(SYMBOL_RE, token):
             self.syntax_error(f"Malformed {what} name!")
         return str(token)
 
